@@ -5,29 +5,29 @@
 @tailwind utilities;
 
 :root {
-  --bg: #f5f7fb;
-  --card: rgba(255, 255, 255, 0.82);
+  --bg: #f6f8fb;
+  --card: rgba(255, 255, 255, 0.9);
   --card-solid: #ffffff;
   --text: #0f172a;
-  --muted: #52627a;
-  --border: rgba(148, 163, 184, 0.22);
-  --brand-a: #2563eb;
-  --brand-b: #7c3aed;
-  --brand-c: #0ea5e9;
-  --surface-2: rgba(255, 255, 255, 0.56);
+  --muted: #475569;
+  --border: rgba(15, 23, 42, 0.1);
+  --brand-a: #0f766e;
+  --brand-b: #2563eb;
+  --brand-c: #f59e0b;
+  --surface-2: rgba(255, 255, 255, 0.72);
 }
 
 .dark {
   --bg: #030712;
-  --card: rgba(12, 19, 35, 0.8);
+  --card: rgba(12, 19, 35, 0.88);
   --card-solid: #0b1220;
   --text: #e2e8f0;
-  --muted: #9fb0c6;
-  --border: rgba(100, 116, 139, 0.3);
-  --brand-a: #3b82f6;
-  --brand-b: #a855f7;
-  --brand-c: #22d3ee;
-  --surface-2: rgba(15, 23, 42, 0.52);
+  --muted: #a6b3c5;
+  --border: rgba(148, 163, 184, 0.24);
+  --brand-a: #2dd4bf;
+  --brand-b: #60a5fa;
+  --brand-c: #fbbf24;
+  --surface-2: rgba(15, 23, 42, 0.7);
 }
 
 html, body, #root {
@@ -37,8 +37,8 @@ html, body, #root {
 body {
   font-family: 'Plus Jakarta Sans', system-ui, sans-serif;
   background:
-    linear-gradient(135deg, rgba(14, 165, 233, 0.08), transparent 34%),
-    linear-gradient(315deg, rgba(16, 185, 129, 0.08), transparent 38%),
+    linear-gradient(135deg, rgba(15, 118, 110, 0.08), transparent 32%),
+    linear-gradient(315deg, rgba(245, 158, 11, 0.07), transparent 36%),
     var(--bg);
   color: var(--text);
   -webkit-font-smoothing: antialiased;
@@ -54,7 +54,7 @@ body {
   .premium-card {
     background: var(--card);
     border: 1px solid var(--border);
-    @apply rounded-lg backdrop-blur-xl shadow-[0_18px_40px_rgba(15,23,42,0.1)];
+    @apply rounded-lg backdrop-blur-xl shadow-[0_18px_42px_rgba(15,23,42,0.09)];
   }
 
   .premium-surface {

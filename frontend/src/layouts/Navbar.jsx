@@ -70,19 +70,20 @@ export default function Navbar() {
     <motion.nav
       initial={{ opacity: 0, y: -14 }}
       animate={{ opacity: 1, y: 0 }}
-      className="sticky top-0 z-50 border-b border-slate-900/10 bg-slate-950/92 text-white shadow-lg shadow-slate-950/10 backdrop-blur-2xl dark:border-white/10"
+      className="sticky top-0 z-50 border-b border-white/10 bg-slate-950 text-white shadow-[0_12px_30px_rgba(2,6,23,0.28)]"
     >
       <div className="section-container py-3 flex items-center justify-between gap-4">
-        <Link to="/dashboard" className="font-black text-xl tracking-tight text-white">
-          CampusSwap
+        <Link to="/dashboard" className="group flex items-center gap-2">
+          <span className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-teal-400 via-blue-500 to-amber-400 text-sm font-black text-slate-950 shadow-lg shadow-teal-500/20">CS</span>
+          <span className="text-xl font-black tracking-tight text-white">CampusSwap</span>
         </Link>
 
-        <div className="hidden md:flex items-center gap-6">
+        <div className="hidden items-center gap-1 rounded-lg border border-white/10 bg-white/[0.06] p-1 md:flex">
           {links.map((link) => (
             <NavLink
               key={link.href}
               to={link.href}
-              className={({ isActive }) => `rounded-lg px-2.5 py-2 text-sm font-medium transition ${isActive ? 'bg-white/12 text-cyan-200' : 'text-slate-200 hover:bg-white/10 hover:text-white'}`}
+              className={({ isActive }) => `rounded-md px-3 py-2 text-sm font-semibold transition ${isActive ? 'bg-white text-slate-950 shadow-sm' : 'text-slate-200 hover:bg-white/10 hover:text-white'}`}
             >
               {link.label}
             </NavLink>
@@ -90,8 +91,8 @@ export default function Navbar() {
         </div>
 
         <div className="hidden md:flex items-center gap-3">
-          <Link to="/feedback" className="rounded-lg border border-white/15 px-3 py-2 text-sm text-slate-100 hover:bg-white/10">Feedback</Link>
-          <Link to="/notifications" className="relative rounded-lg border border-white/15 px-3 py-2 text-sm text-slate-100 hover:bg-white/10">
+          <Link to="/feedback" className="rounded-lg border border-teal-300/30 px-3 py-2 text-sm font-semibold text-teal-100 hover:bg-teal-400/10">Feedback</Link>
+          <Link to="/notifications" className="relative rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-white/10">
             Notifications
             {unreadCount > 0 && (
               <span className="absolute -top-2 -right-2 min-w-5 h-5 px-1 bg-rose-500 text-white text-[10px] rounded-full flex items-center justify-center">
@@ -99,12 +100,12 @@ export default function Navbar() {
               </span>
             )}
           </Link>
-          <button onClick={toggleTheme} className="rounded-lg border border-white/15 px-3 py-2 text-sm text-slate-100 hover:bg-white/10">{dark ? 'Light' : 'Dark'}</button>
+          <button onClick={toggleTheme} className="rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-white/10">{dark ? 'Light' : 'Dark'}</button>
           <Link to="/profile" className="text-sm font-medium text-slate-100">{user?.name || 'Profile'}</Link>
-          <button onClick={handleLogout} className="rounded-lg bg-gradient-to-r from-rose-500 to-amber-500 px-4 py-2 text-sm font-semibold text-white">Logout</button>
+          <button onClick={handleLogout} className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-black text-slate-950 shadow-lg shadow-amber-500/20 hover:bg-amber-300">Logout</button>
         </div>
 
-        <button className="rounded-lg border border-white/15 px-3 py-2 md:hidden" onClick={() => setIsOpen((v) => !v)}>
+        <button className="rounded-lg border border-white/15 px-3 py-2 font-semibold md:hidden" onClick={() => setIsOpen((v) => !v)}>
           Menu
         </button>
       </div>
@@ -130,9 +131,9 @@ export default function Navbar() {
                   {link.label}
                 </Link>
               ))}
-              <div className="flex gap-2 mt-2">
+              <div className="mt-2 flex gap-2">
                 <button onClick={toggleTheme} className="rounded-lg border border-white/15 px-3 py-2 text-sm">{dark ? 'Light' : 'Dark'}</button>
-                <button onClick={handleLogout} className="rounded-lg bg-gradient-to-r from-rose-500 to-amber-500 px-4 py-2 text-sm font-semibold text-white">Logout</button>
+                <button onClick={handleLogout} className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-black text-slate-950">Logout</button>
               </div>
             </div>
           </motion.div>
