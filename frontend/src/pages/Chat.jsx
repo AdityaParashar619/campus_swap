@@ -18,6 +18,7 @@ export default function Chat() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [messages, setMessages] = useState([]);
   const [chatPreview, setChatPreview] = useState({});
+  const [chatUpdatedAt, setChatUpdatedAt] = useState({});
   const [unreadByUser, setUnreadByUser] = useState({});
   const [typingByUser, setTypingByUser] = useState({});
   const [onlineMap, setOnlineMap] = useState({});
@@ -40,6 +41,7 @@ export default function Chat() {
       const senderId = message.sender?._id || message.sender?.id || message.senderId;
       if (senderId) {
         setChatPreview((prev) => ({ ...prev, [senderId]: message.text }));
+        setChatUpdatedAt((prev) => ({ ...prev, [senderId]: new Date(message.createdAt || Date.now()).getTime() }));
       }
 
       if (selectedUser && senderId === selectedUser._id) {
@@ -73,13 +75,19 @@ export default function Chat() {
               const res = await messageAPI.getChat(u._id);
               const chat = res.data.data || [];
               const last = chat.at(-1);
-              return [u._id, last?.text || 'Start a conversation'];
+              return [u._id, {
+                preview: last?.text || 'Start a conversation',
+                updatedAt: last?.createdAt ? new Date(last.createdAt).getTime() : 0
+              }];
             } catch {
-              return [u._id, 'Start a conversation'];
+              return [u._id, { preview: 'Start a conversation', updatedAt: 0 }];
             }
           })
         );
-        setChatPreview(Object.fromEntries(previewEntries));
+        const previewByUser = Object.fromEntries(previewEntries.map(([id, data]) => [id, data.preview]));
+        const updatedByUser = Object.fromEntries(previewEntries.map(([id, data]) => [id, data.updatedAt]));
+        setChatPreview(previewByUser);
+        setChatUpdatedAt(updatedByUser);
       } catch (error) {
         console.error('Failed to fetch users:', error);
       } finally {
@@ -122,6 +130,15 @@ export default function Chat() {
     return Boolean(typingByUser[selectedUser._id]);
   }, [typingByUser, selectedUser]);
 
+  const sortedUsers = useMemo(
+    () => [...users].sort((a, b) => {
+      const unreadDelta = (unreadByUser[b._id] || 0) - (unreadByUser[a._id] || 0);
+      if (unreadDelta !== 0) return unreadDelta;
+      return (chatUpdatedAt[b._id] || 0) - (chatUpdatedAt[a._id] || 0);
+    }),
+    [chatUpdatedAt, unreadByUser, users]
+  );
+
   const sendTyping = (isTyping) => {
     if (!socket || !selectedUser) return;
     socket.emit('typing', { receiverId: selectedUser._id, senderId: user?.id, isTyping });
@@ -143,6 +160,7 @@ export default function Chat() {
       await messageAPI.send({ receiverId: selectedUser._id, text: newMessage });
       setMessages((prev) => [...prev, message]);
       setChatPreview((prev) => ({ ...prev, [selectedUser._id]: newMessage }));
+      setChatUpdatedAt((prev) => ({ ...prev, [selectedUser._id]: Date.now() }));
       setNewMessage('');
       sendTyping(false);
     } catch (error) {
@@ -187,7 +205,7 @@ export default function Chat() {
                   {loading ? (
                     Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton h-14" />)
                   ) : (
-                    users.map((u) => (
+                    sortedUsers.map((u) => (
                       <button
                         key={u._id}
                         onClick={() => {

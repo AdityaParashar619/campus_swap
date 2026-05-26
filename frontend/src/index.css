@@ -73,7 +73,7 @@ body {
   }
 
   .text-hero-lg {
-    @apply text-4xl sm:text-5xl lg:text-7xl font-black leading-tight tracking-tight;
+    @apply text-3xl sm:text-5xl lg:text-7xl font-black leading-tight tracking-tight;
   }
 
   .text-section-title {

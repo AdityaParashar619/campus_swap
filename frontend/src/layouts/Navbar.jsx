@@ -72,13 +72,13 @@ export default function Navbar() {
       animate={{ opacity: 1, y: 0 }}
       className="sticky top-0 z-50 border-b border-white/10 bg-slate-950 text-white shadow-[0_12px_30px_rgba(2,6,23,0.28)]"
     >
-      <div className="section-container py-3 flex items-center justify-between gap-4">
+      <div className="section-container grid grid-cols-[auto_1fr_auto] items-center gap-3 py-3">
         <Link to="/dashboard" className="group flex items-center gap-2">
           <span className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-teal-400 via-blue-500 to-amber-400 text-sm font-black text-slate-950 shadow-lg shadow-teal-500/20">CS</span>
-          <span className="text-xl font-black tracking-tight text-white">CampusSwap</span>
+          <span className="hidden text-xl font-black tracking-tight text-white min-[380px]:inline">CampusSwap</span>
         </Link>
 
-        <div className="hidden items-center gap-1 rounded-lg border border-white/10 bg-white/[0.06] p-1 xl:flex">
+        <div className="mx-auto hidden items-center gap-1 rounded-lg border border-white/10 bg-white/[0.06] p-1 xl:flex">
           {links.map((link) => (
             <NavLink
               key={link.href}
@@ -90,8 +90,7 @@ export default function Navbar() {
           ))}
         </div>
 
-        <div className="hidden items-center gap-3 xl:flex">
-          <Link to="/feedback" className="rounded-lg border border-teal-300/30 px-3 py-2 text-sm font-semibold text-teal-100 hover:bg-teal-400/10">Feedback</Link>
+        <div className="hidden items-center justify-end gap-3 xl:flex">
           <Link to="/notifications" className="relative rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-white/10">
             Notifications
             {unreadCount > 0 && (
@@ -101,7 +100,7 @@ export default function Navbar() {
             )}
           </Link>
           <button onClick={toggleTheme} className="rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-white/10">{dark ? 'Light' : 'Dark'}</button>
-          <Link to="/profile" className="text-sm font-medium text-slate-100">{user?.name || 'Profile'}</Link>
+          <Link to="/profile" className="max-w-36 truncate text-sm font-bold text-slate-100">{user?.name || 'Profile'}</Link>
           <button onClick={handleLogout} className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-black text-slate-950 shadow-lg shadow-amber-500/20 hover:bg-amber-300">Logout</button>
         </div>
 
@@ -120,9 +119,6 @@ export default function Navbar() {
             className="overflow-hidden xl:hidden"
           >
             <div className="section-container flex flex-col gap-2 pb-4">
-              <Link to="/feedback" className="rounded-lg bg-white/10 px-3 py-2" onClick={() => setIsOpen(false)}>
-                Feedback / Report
-              </Link>
               <Link to="/notifications" className="rounded-lg bg-white/10 px-3 py-2" onClick={() => setIsOpen(false)}>
                 Notifications {unreadCount > 0 ? `(${unreadCount})` : ''}
               </Link>
@@ -131,7 +127,10 @@ export default function Navbar() {
                   {link.label}
                 </Link>
               ))}
-              <div className="mt-2 flex gap-2">
+              <div className="mt-2 flex flex-wrap items-center gap-2">
+                <Link to="/profile" className="rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold" onClick={() => setIsOpen(false)}>
+                  {user?.name || 'Profile'}
+                </Link>
                 <button onClick={toggleTheme} className="rounded-lg border border-white/15 px-3 py-2 text-sm">{dark ? 'Light' : 'Dark'}</button>
                 <button onClick={handleLogout} className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-black text-slate-950">Logout</button>
               </div>
