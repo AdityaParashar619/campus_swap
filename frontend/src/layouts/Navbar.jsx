@@ -3,6 +3,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { notificationAPI } from '../services/api';
+import satiLogo from '../assets/sati-logo.jpg';
 
 const baseLinks = [
   { href: '/listings', label: 'Marketplace' },
@@ -12,6 +13,19 @@ const baseLinks = [
   { href: '/chat', label: 'Chat' },
   { href: '/about', label: 'About' }
 ];
+
+const SunIcon = () => (
+  <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.36 6.36-1.42-1.42M7.06 7.06 5.64 5.64m12.72 0-1.42 1.42M7.06 16.94l-1.42 1.42" />
+    <circle cx="12" cy="12" r="4" />
+  </svg>
+);
+
+const MoonIcon = () => (
+  <svg aria-hidden="true" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.7 6.7 0 0 0 21 12.8Z" />
+  </svg>
+);
 
 export default function Navbar() {
   const { user, logout } = useAuth();
@@ -74,8 +88,11 @@ export default function Navbar() {
     >
       <div className="section-container grid grid-cols-[auto_1fr_auto] items-center gap-3 py-3">
         <Link to="/dashboard" className="group flex items-center gap-2">
-          <span className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-teal-400 via-blue-500 to-amber-400 text-sm font-black text-slate-950 shadow-lg shadow-teal-500/20">CS</span>
-          <span className="hidden text-xl font-black tracking-tight text-white min-[380px]:inline">CampusSwap</span>
+          <img src={satiLogo} alt="SATI logo" className="h-10 w-10 rounded-lg border border-white/15 bg-white object-contain p-1 shadow-lg shadow-teal-500/20" />
+          <span className="hidden leading-tight min-[380px]:block">
+            <span className="block text-lg font-black tracking-tight text-white">SATI Swap</span>
+            <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-300">Samrat Ashok Technological Institute</span>
+          </span>
         </Link>
 
         <div className="mx-auto hidden items-center gap-1 rounded-lg border border-white/10 bg-white/[0.06] p-1 xl:flex">
@@ -99,7 +116,14 @@ export default function Navbar() {
               </span>
             )}
           </Link>
-          <button onClick={toggleTheme} className="rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-white/10">{dark ? 'Light' : 'Dark'}</button>
+          <button
+            onClick={toggleTheme}
+            aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}
+            title={dark ? 'Light theme' : 'Dark theme'}
+            className="grid h-10 w-10 place-items-center rounded-lg border border-white/15 text-slate-100 hover:bg-white/10"
+          >
+            {dark ? <SunIcon /> : <MoonIcon />}
+          </button>
           <Link to="/profile" className="max-w-36 truncate text-sm font-bold text-slate-100">{user?.name || 'Profile'}</Link>
           <button onClick={handleLogout} className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-black text-slate-950 shadow-lg shadow-amber-500/20 hover:bg-amber-300">Logout</button>
         </div>
@@ -131,7 +155,13 @@ export default function Navbar() {
                 <Link to="/profile" className="rounded-lg bg-white/10 px-3 py-2 text-sm font-semibold" onClick={() => setIsOpen(false)}>
                   {user?.name || 'Profile'}
                 </Link>
-                <button onClick={toggleTheme} className="rounded-lg border border-white/15 px-3 py-2 text-sm">{dark ? 'Light' : 'Dark'}</button>
+                <button
+                  onClick={toggleTheme}
+                  aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'}
+                  className="grid h-10 w-10 place-items-center rounded-lg border border-white/15"
+                >
+                  {dark ? <SunIcon /> : <MoonIcon />}
+                </button>
                 <button onClick={handleLogout} className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-black text-slate-950">Logout</button>
               </div>
             </div>
