@@ -16,6 +16,47 @@ const emptyProfile = {
   profilePicture: ''
 };
 
+const MAX_PROFILE_IMAGE_SIZE = 5 * 1024 * 1024;
+
+const resizeProfileImage = (file) => new Promise((resolve, reject) => {
+  if (!file.type.startsWith('image/')) {
+    reject(new Error('Please select a valid image file.'));
+    return;
+  }
+
+  if (file.size > MAX_PROFILE_IMAGE_SIZE) {
+    reject(new Error('Image must be smaller than 5 MB.'));
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = () => {
+    const image = new Image();
+    image.onload = () => {
+      const maxSize = 512;
+      const scale = Math.min(maxSize / image.width, maxSize / image.height, 1);
+      const width = Math.round(image.width * scale);
+      const height = Math.round(image.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const context = canvas.getContext('2d');
+
+      if (!context) {
+        reject(new Error('Could not process this image.'));
+        return;
+      }
+
+      context.drawImage(image, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', 0.82));
+    };
+    image.onerror = () => reject(new Error('Could not read this image.'));
+    image.src = reader.result;
+  };
+  reader.onerror = () => reject(new Error('Could not read this file.'));
+  reader.readAsDataURL(file);
+});
+
 export default function Profile() {
   const { user, login } = useAuth();
   const [profile, setProfile] = useState(emptyProfile);
@@ -23,8 +64,11 @@ export default function Profile() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
+  const [imageProcessing, setImageProcessing] = useState(false);
+  const [imageError, setImageError] = useState('');
 
   const avatarUrl = (profile.profilePicture || user?.profilePicture || '').trim();
+  const hasUploadedAvatar = avatarUrl.startsWith('data:image/');
   const displayName = profile.name || user?.name || 'Student';
   const initials = displayName
     .split(' ')
@@ -75,6 +119,23 @@ export default function Profile() {
       if (token) login(updated, token);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleProfileImageUpload = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImageProcessing(true);
+    setImageError('');
+    try {
+      const imageDataUrl = await resizeProfileImage(file);
+      setProfile((current) => ({ ...current, profilePicture: imageDataUrl }));
+    } catch (error) {
+      setImageError(error.message || 'Could not upload this image.');
+    } finally {
+      setImageProcessing(false);
+      event.target.value = '';
     }
   };
 
@@ -134,8 +195,7 @@ export default function Profile() {
                       ['name', 'Full Name'],
                       ['collegeName', 'College Name'],
                       ['course', 'Course / Branch'],
-                      ['yearSemester', 'Year / Semester'],
-                      ['profilePicture', 'Profile Image URL']
+                      ['yearSemester', 'Year / Semester']
                     ].map(([key, label]) => (
                       <input
                         key={key}
@@ -146,9 +206,47 @@ export default function Profile() {
                       />
                     ))}
 
-                    <p className="md:col-span-2 -mt-2 text-xs text-slate-500">
-                      Use a public direct image link, such as a JPG, PNG, or WebP URL.
-                    </p>
+                    <div className="md:col-span-2 rounded-2xl border border-slate-300/30 bg-white/60 p-4">
+                      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                        <div>
+                          <p className="text-sm font-semibold text-slate-800">Profile photo</p>
+                          <p className="text-xs text-slate-500">Upload JPG, PNG, or WebP. Large photos are resized automatically.</p>
+                        </div>
+                        <label className="inline-flex cursor-pointer items-center justify-center rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-slate-800">
+                          {imageProcessing ? 'Processing...' : 'Choose image'}
+                          <input
+                            type="file"
+                            accept="image/png,image/jpeg,image/webp"
+                            onChange={handleProfileImageUpload}
+                            disabled={imageProcessing}
+                            className="sr-only"
+                          />
+                        </label>
+                      </div>
+                      {hasUploadedAvatar ? (
+                        <div className="mt-3 flex flex-col gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+                          <span className="text-sm font-medium text-emerald-800">Uploaded image ready. Save profile to keep it.</span>
+                          <button
+                            type="button"
+                            onClick={() => setProfile({ ...profile, profilePicture: '' })}
+                            className="text-left text-sm font-semibold text-rose-600 hover:text-rose-700"
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      ) : (
+                        <input
+                          value={profile.profilePicture}
+                          onChange={(e) => {
+                            setImageError('');
+                            setProfile({ ...profile, profilePicture: e.target.value });
+                          }}
+                          placeholder="Or paste a public image URL"
+                          className="mt-3 w-full px-4 py-3 rounded-xl border border-slate-300/40 bg-white/70 text-sm"
+                        />
+                      )}
+                      {imageError ? <p className="mt-2 text-xs font-medium text-rose-600">{imageError}</p> : null}
+                    </div>
 
                     <textarea
                       value={profile.bio}
