@@ -90,7 +90,7 @@ export default function Navbar() {
         <Link to="/dashboard" className="group flex items-center gap-2">
           <img src={satiLogo} alt="SATI logo" className="h-10 w-10 rounded-lg border border-white/15 bg-white object-contain p-1 shadow-lg shadow-teal-500/20" />
           <span className="hidden leading-tight min-[380px]:block">
-            <span className="block text-lg font-black tracking-tight text-white">SATI Swap</span>
+            <span className="block text-lg font-black tracking-tight text-white">CampusSwap</span>
             <span className="block text-[10px] font-semibold uppercase tracking-wide text-slate-300">Samrat Ashok Technological Institute</span>
           </span>
         </Link>

@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { CountUp, PageTransition, PremiumCard, Reveal, Stagger, StaggerItem } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
 import Layout from '../layouts/Layout';
+import satiCampus from '../assets/sati-campus.png';
 
 const menuItems = [
   { title: 'Marketplace', desc: 'Buy, sell, and swap campus essentials', link: '/listings', key: 'MK' },
@@ -19,8 +20,10 @@ export default function Dashboard() {
   return (
     <PageTransition>
       <Layout>
-        <div className="min-h-screen py-10">
-          <div className="section-container space-y-8">
+        <div className="relative min-h-screen overflow-hidden py-10">
+          <img src={satiCampus} alt="" className="absolute inset-0 h-full w-full object-cover opacity-[0.14]" />
+          <div className="absolute inset-0 bg-white/82 backdrop-blur-[1px] dark:bg-slate-950/86" />
+          <div className="section-container relative z-10 space-y-8">
             <Reveal className="space-y-2">
               <p className="chip">Student control center</p>
               <h1 className="text-section-title">Welcome back, {user?.name}</h1>
