@@ -1,9 +1,9 @@
 ﻿import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { CountUp, PageTransition, Reveal, Stagger, StaggerItem } from '../components/ui';
 import satiCampus from '../assets/sati-campus.png';
 import satiLogo from '../assets/sati-logo.jpg';
+import { CountUp, PageTransition, Reveal, Stagger, StaggerItem } from '../components/ui';
 
 const faqs = [
   {
@@ -48,7 +48,7 @@ export default function Landing() {
               <StaggerItem><span className="chip">SATI verified campus-only ecosystem</span></StaggerItem>
               <StaggerItem>
                 <h1 className="text-hero-lg max-w-xl">
-                  CampusSwap Student Marketplace,
+                  SATI Student Marketplace,
                   <span className="bg-gradient-to-r from-teal-700 via-blue-700 to-amber-600 bg-clip-text text-transparent"> Networking, Notes</span>
                   {' '}and Real-Time Chat.
                 </h1>

@@ -18,7 +18,6 @@ export default function Chat() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [messages, setMessages] = useState([]);
   const [chatPreview, setChatPreview] = useState({});
-  const [chatUpdatedAt, setChatUpdatedAt] = useState({});
   const [unreadByUser, setUnreadByUser] = useState({});
   const [typingByUser, setTypingByUser] = useState({});
   const [onlineMap, setOnlineMap] = useState({});
@@ -41,7 +40,6 @@ export default function Chat() {
       const senderId = message.sender?._id || message.sender?.id || message.senderId;
       if (senderId) {
         setChatPreview((prev) => ({ ...prev, [senderId]: message.text }));
-        setChatUpdatedAt((prev) => ({ ...prev, [senderId]: new Date(message.createdAt || Date.now()).getTime() }));
       }
 
       if (selectedUser && senderId === selectedUser._id) {
@@ -75,19 +73,13 @@ export default function Chat() {
               const res = await messageAPI.getChat(u._id);
               const chat = res.data.data || [];
               const last = chat.at(-1);
-              return [u._id, {
-                preview: last?.text || 'Start a conversation',
-                updatedAt: last?.createdAt ? new Date(last.createdAt).getTime() : 0
-              }];
+              return [u._id, last?.text || 'Start a conversation'];
             } catch {
-              return [u._id, { preview: 'Start a conversation', updatedAt: 0 }];
+              return [u._id, 'Start a conversation'];
             }
           })
         );
-        const previewByUser = Object.fromEntries(previewEntries.map(([id, data]) => [id, data.preview]));
-        const updatedByUser = Object.fromEntries(previewEntries.map(([id, data]) => [id, data.updatedAt]));
-        setChatPreview(previewByUser);
-        setChatUpdatedAt(updatedByUser);
+        setChatPreview(Object.fromEntries(previewEntries));
       } catch (error) {
         console.error('Failed to fetch users:', error);
       } finally {
@@ -130,15 +122,6 @@ export default function Chat() {
     return Boolean(typingByUser[selectedUser._id]);
   }, [typingByUser, selectedUser]);
 
-  const sortedUsers = useMemo(
-    () => [...users].sort((a, b) => {
-      const unreadDelta = (unreadByUser[b._id] || 0) - (unreadByUser[a._id] || 0);
-      if (unreadDelta !== 0) return unreadDelta;
-      return (chatUpdatedAt[b._id] || 0) - (chatUpdatedAt[a._id] || 0);
-    }),
-    [chatUpdatedAt, unreadByUser, users]
-  );
-
   const sendTyping = (isTyping) => {
     if (!socket || !selectedUser) return;
     socket.emit('typing', { receiverId: selectedUser._id, senderId: user?.id, isTyping });
@@ -160,7 +143,6 @@ export default function Chat() {
       await messageAPI.send({ receiverId: selectedUser._id, text: newMessage });
       setMessages((prev) => [...prev, message]);
       setChatPreview((prev) => ({ ...prev, [selectedUser._id]: newMessage }));
-      setChatUpdatedAt((prev) => ({ ...prev, [selectedUser._id]: Date.now() }));
       setNewMessage('');
       sendTyping(false);
     } catch (error) {
@@ -199,13 +181,13 @@ export default function Chat() {
                   <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">Live</span>
                 </div>
                 <div className="mb-3">
-                  <input className="premium-surface w-full px-3 py-3 text-sm text-black-900 placeholder:text-black-400 dark:text-white" placeholder="Search chats" />
+                  <input className="premium-surface w-full px-3 py-3 text-sm text-slate-900 placeholder:text-slate-400 dark:text-white" placeholder="Search chats" />
                 </div>
                 <div className="flex-1 overflow-y-auto space-y-2 pr-1">
                   {loading ? (
                     Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton h-14" />)
                   ) : (
-                    sortedUsers.map((u) => (
+                    users.map((u) => (
                       <button
                         key={u._id}
                         onClick={() => {
