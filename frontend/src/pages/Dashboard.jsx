@@ -1,21 +1,35 @@
 import { motion } from 'framer-motion';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CountUp, PageTransition, PremiumCard, Reveal, Stagger, StaggerItem } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
 import Layout from '../layouts/Layout';
 import satiCampus from '../assets/sati-campus.png';
+import { authAPI } from '../services/api';
 
 const menuItems = [
   { title: 'Marketplace', desc: 'Buy, sell, and swap campus essentials', link: '/listings', key: 'MK' },
   { title: 'Notes Exchange', desc: 'Share and discover semester notes', link: '/notes', key: 'NT' },
   { title: 'Borrow Requests', desc: 'Ask community for urgent help', link: '/bounties', key: 'RQ' },
-  { title: 'Student Network', desc: 'Build trust and connect with peers', link: '/network', key: 'NW' },
-  { title: 'Live Chat', desc: 'Real-time messaging with students', link: '/chat', key: 'CH' },
+  { title: 'Student Network', desc: 'Unlock trusted chat, contact sharing, and campus reputation', link: '/network', key: 'NW' },
+  { title: 'Live Chat', desc: 'Send a starter message, then connect for unlimited chat', link: '/chat', key: 'CH' },
   { title: 'Profile', desc: 'Grow your student reputation', link: '/profile', key: 'PR' }
 ];
 
 export default function Dashboard() {
   const { user } = useAuth();
+  const [stats, setStats] = useState({ listingsCount: 0, connectionsCount: 0, messagesCount: 0 });
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const response = await authAPI.getMe();
+        setStats(response.data.stats || {});
+      } catch {
+        setStats({ listingsCount: 0, connectionsCount: 0, messagesCount: 0 });
+      }
+    })();
+  }, []);
 
   return (
     <PageTransition>
@@ -32,9 +46,9 @@ export default function Dashboard() {
 
             <div className="grid sm:grid-cols-3 gap-4">
               {[
-                ['Active listings', 24],
-                ['Connections', 112],
-                ['Messages', 389]
+                ['Active listings', stats.listingsCount || 0],
+                ['Trusted connections', stats.connectionsCount || 0],
+                ['Messages', stats.messagesCount || 0]
               ].map(([label, number]) => (
                 <PremiumCard key={label} className="p-5">
                   <p className="text-body-sm">{label}</p>

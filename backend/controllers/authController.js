@@ -10,6 +10,7 @@ import Message from '../models/Message.js';
 import Note from '../models/Note.js';
 import RequestPost from '../models/RequestPost.js';
 import User from '../models/User.js';
+import { exposeContactForConnection } from '../utils/connections.js';
 
 const sanitizeUser = (user) => ({
   id: user._id,
@@ -18,6 +19,9 @@ const sanitizeUser = (user) => ({
   enrollmentNumber: user.enrollmentNumber,
   role: user.role,
   profilePicture: user.profilePicture,
+  phoneNumber: user.phoneNumber,
+  whatsappNumber: user.whatsappNumber,
+  contactVisibility: user.contactVisibility,
   collegeName: user.collegeName,
   course: user.course,
   yearSemester: user.yearSemester,
@@ -120,7 +124,19 @@ export const getMe = asyncHandler(async (req, res) => {
 });
 
 export const updateProfile = asyncHandler(async (req, res) => {
-  const allowedFields = ['name', 'collegeName', 'course', 'yearSemester', 'bio', 'interests', 'skills', 'profilePicture'];
+  const allowedFields = [
+    'name',
+    'collegeName',
+    'course',
+    'yearSemester',
+    'bio',
+    'interests',
+    'skills',
+    'profilePicture',
+    'phoneNumber',
+    'whatsappNumber',
+    'contactVisibility'
+  ];
   const updates = {};
   for (const key of allowedFields) if (key in req.body) updates[key] = req.body[key];
 
@@ -131,8 +147,26 @@ export const updateProfile = asyncHandler(async (req, res) => {
 });
 
 export const getAllUsers = asyncHandler(async (req, res) => {
-  const users = await User.find({ _id: { $ne: req.user.userId } }).select(
-    'name email _id course yearSemester trustScore isVerifiedStudent profilePicture collegeName bio interests skills'
+  const currentUserId = req.user.userId;
+  const [users, connections] = await Promise.all([
+    User.find({ _id: { $ne: currentUserId }, isBlocked: { $ne: true } }).select(
+      'name email _id course yearSemester trustScore isVerifiedStudent profilePicture collegeName bio interests skills phoneNumber whatsappNumber contactVisibility'
+    ),
+    Connection.find({ status: 'accepted', $or: [{ requester: currentUserId }, { recipient: currentUserId }] })
+  ]);
+
+  const connectedUserIds = new Set(
+    connections.map((connection) =>
+      connection.requester.toString() === currentUserId
+        ? connection.recipient.toString()
+        : connection.requester.toString()
+    )
   );
-  res.json({ success: true, data: users });
+
+  const data = users.map((student) => ({
+    ...exposeContactForConnection(student, connectedUserIds.has(student._id.toString())),
+    isConnected: connectedUserIds.has(student._id.toString())
+  }));
+
+  res.json({ success: true, data });
 });

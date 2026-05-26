@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { Button, PageTransition, PremiumCard } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
 import Layout from '../layouts/Layout';
@@ -9,6 +10,8 @@ const getId = (value) => {
   if (typeof value === 'string') return value;
   return String(value._id || value.id || '');
 };
+
+const getInitials = (name) => name?.split(' ').map((word) => word[0]).join('').toUpperCase().slice(0, 2) || '?';
 
 export default function Network() {
   const [connections, setConnections] = useState([]);
@@ -52,6 +55,9 @@ export default function Network() {
     () => connections.filter((connection) => connection.status === 'accepted'),
     [connections]
   );
+
+  const getOtherStudent = (connection) =>
+    getId(connection.requester) === currentUserId ? connection.recipient : connection.requester;
 
   const sendRequest = async (recipientId) => {
     setMessage('');
@@ -102,7 +108,21 @@ export default function Network() {
           <div className="section-container space-y-8">
             <div>
               <h1 className="text-section-title mb-2">Student Network</h1>
-              <p className="text-body-sm">Find students, send requests, and accept incoming connections.</p>
+              <p className="text-body-sm">Connect to unlock trusted chat, contact visibility, priority updates, and safer campus exchanges.</p>
+            </div>
+
+            <div className="grid gap-3 md:grid-cols-4">
+              {[
+                ['Unlimited chat', 'Continue conversations after the first starter message.'],
+                ['Trusted contacts', 'Share phone or WhatsApp only with accepted connections.'],
+                ['Priority inbox', 'Connected students stay higher in chat and network lists.'],
+                ['Trust score', 'Accepted campus links improve student reputation.']
+              ].map(([title, body]) => (
+                <div key={title} className="rounded-2xl border border-slate-200/70 bg-white/90 p-4 shadow-sm dark:border-slate-700/60 dark:bg-slate-900/80">
+                  <p className="text-sm font-black text-slate-950 dark:text-white">{title}</p>
+                  <p className="mt-1 text-xs leading-relaxed text-slate-600 dark:text-slate-300">{body}</p>
+                </div>
+              ))}
             </div>
 
             {message && <p className="rounded-lg bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700 dark:bg-blue-950/50 dark:text-blue-200 border border-blue-300/30 dark:border-blue-400/20 shadow-sm">{message}</p>}
@@ -162,6 +182,51 @@ export default function Network() {
                   </div>
                 )}
               </PremiumCard>
+            </div>
+
+            <div>
+              <h2 className="text-feature-title mb-4">Trusted Connections</h2>
+              {acceptedConnections.length === 0 ? (
+                <PremiumCard className="border-slate-200/70 bg-white dark:border-slate-700/50 dark:bg-slate-900/90 shadow-md">
+                  <p className="text-body-sm">No trusted connections yet. Accept requests or connect with students below to unlock contact sharing and unlimited chat.</p>
+                </PremiumCard>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {acceptedConnections.map((connection) => {
+                    const student = getOtherStudent(connection) || {};
+                    return (
+                      <PremiumCard key={connection._id} className="border-slate-200/70 bg-white dark:border-slate-700/50 dark:bg-slate-900/90 shadow-md">
+                        <div className="flex items-start gap-3">
+                          <div className="grid h-12 w-12 shrink-0 place-items-center overflow-hidden rounded-xl bg-gradient-to-br from-emerald-500 via-blue-600 to-slate-900 font-black text-white">
+                            {student.profilePicture ? <img src={student.profilePicture} alt="" className="h-full w-full object-cover" /> : getInitials(student.name)}
+                          </div>
+                          <div className="min-w-0">
+                            <p className="truncate font-black text-slate-950 dark:text-white">{student.name || 'Student'}</p>
+                            <p className="text-xs text-slate-600 dark:text-slate-300">{student.course || 'Student'} {student.yearSemester || ''}</p>
+                          </div>
+                        </div>
+                        <div className="mt-4 space-y-2 rounded-xl bg-slate-50 p-3 text-sm dark:bg-slate-800/70">
+                          {student.phoneNumber || student.whatsappNumber ? (
+                            <>
+                              {student.phoneNumber && <p className="text-slate-700 dark:text-slate-200">Phone: <span className="font-semibold">{student.phoneNumber}</span></p>}
+                              {student.whatsappNumber && <p className="text-slate-700 dark:text-slate-200">WhatsApp: <span className="font-semibold">{student.whatsappNumber}</span></p>}
+                            </>
+                          ) : (
+                            <p className="text-slate-600 dark:text-slate-300">Contact details are private.</p>
+                          )}
+                        </div>
+                        <Link
+                          to="/chat"
+                          state={{ selectedUserId: getId(student) }}
+                          className="mt-4 inline-flex w-full justify-center rounded-xl bg-slate-950 px-4 py-2 text-sm font-semibold text-white hover:bg-slate-800"
+                        >
+                          Open trusted chat
+                        </Link>
+                      </PremiumCard>
+                    );
+                  })}
+                </div>
+              )}
             </div>
 
             <div>

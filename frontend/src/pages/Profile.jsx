@@ -13,7 +13,10 @@ const emptyProfile = {
   bio: '',
   interests: '',
   skills: '',
-  profilePicture: ''
+  profilePicture: '',
+  phoneNumber: '',
+  whatsappNumber: '',
+  contactVisibility: 'connections'
 };
 
 const MAX_PROFILE_IMAGE_SIZE = 5 * 1024 * 1024;
@@ -94,7 +97,10 @@ export default function Profile() {
           bio: me.bio || '',
           interests: (me.interests || []).join(', '),
           skills: (me.skills || []).join(', '),
-          profilePicture: me.profilePicture || ''
+          profilePicture: me.profilePicture || '',
+          phoneNumber: me.phoneNumber || '',
+          whatsappNumber: me.whatsappNumber || '',
+          contactVisibility: me.contactVisibility || 'connections'
         });
         setStats(response.data.stats || stats);
       } finally {
@@ -195,7 +201,9 @@ export default function Profile() {
                       ['name', 'Full Name'],
                       ['collegeName', 'College Name'],
                       ['course', 'Course / Branch'],
-                      ['yearSemester', 'Year / Semester']
+                      ['yearSemester', 'Year / Semester'],
+                      ['phoneNumber', 'Phone Number'],
+                      ['whatsappNumber', 'WhatsApp Number']
                     ].map(([key, label]) => (
                       <input
                         key={key}
@@ -205,6 +213,30 @@ export default function Profile() {
                         className="px-4 py-3 rounded-xl border border-slate-300/30 bg-white/60"
                       />
                     ))}
+
+                    <div className="md:col-span-2 rounded-2xl border border-slate-300/30 bg-white/60 p-4">
+                      <p className="text-sm font-semibold text-slate-800">Contact visibility</p>
+                      <p className="mt-1 text-xs text-slate-500">Connected students can see your contact details only if you allow it.</p>
+                      <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                        {[
+                          ['connections', 'Show to connections'],
+                          ['private', 'Keep private']
+                        ].map(([value, label]) => (
+                          <button
+                            key={value}
+                            type="button"
+                            onClick={() => setProfile({ ...profile, contactVisibility: value })}
+                            className={`rounded-xl border px-4 py-3 text-left text-sm font-semibold transition ${
+                              profile.contactVisibility === value
+                                ? 'border-blue-400 bg-blue-50 text-blue-800'
+                                : 'border-slate-300/40 bg-white/70 text-slate-700 hover:border-slate-400'
+                            }`}
+                          >
+                            {label}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
 
                     <div className="md:col-span-2 rounded-2xl border border-slate-300/30 bg-white/60 p-4">
                       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">

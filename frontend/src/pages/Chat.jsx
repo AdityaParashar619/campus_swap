@@ -18,10 +18,12 @@ export default function Chat() {
   const [selectedUser, setSelectedUser] = useState(null);
   const [messages, setMessages] = useState([]);
   const [chatPreview, setChatPreview] = useState({});
+  const [chatAccessByUser, setChatAccessByUser] = useState({});
   const [unreadByUser, setUnreadByUser] = useState({});
   const [typingByUser, setTypingByUser] = useState({});
   const [onlineMap, setOnlineMap] = useState({});
   const [newMessage, setNewMessage] = useState('');
+  const [sendError, setSendError] = useState('');
   const [reportOpen, setReportOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [showMobileList, setShowMobileList] = useState(true);
@@ -73,6 +75,7 @@ export default function Chat() {
               const res = await messageAPI.getChat(u._id);
               const chat = res.data.data || [];
               const last = chat.at(-1);
+              setChatAccessByUser((prev) => ({ ...prev, [u._id]: res.data.chatAccess }));
               return [u._id, last?.text || 'Start a conversation'];
             } catch {
               return [u._id, 'Start a conversation'];
@@ -105,7 +108,9 @@ export default function Chat() {
       try {
         const response = await messageAPI.getChat(selectedUser._id);
         setMessages(response.data.data || []);
+        setChatAccessByUser((prev) => ({ ...prev, [selectedUser._id]: response.data.chatAccess }));
         setUnreadByUser((prev) => ({ ...prev, [selectedUser._id]: 0 }));
+        setSendError('');
       } catch (error) {
         console.error('Failed to load messages:', error);
       }
@@ -122,6 +127,21 @@ export default function Chat() {
     return Boolean(typingByUser[selectedUser._id]);
   }, [typingByUser, selectedUser]);
 
+  const selectedChatAccess = selectedUser ? chatAccessByUser[selectedUser._id] : null;
+  const canSendToSelected = !selectedUser || selectedChatAccess?.canSend !== false;
+
+  const sortedUsers = useMemo(() => {
+    return [...users].sort((a, b) => {
+      const unreadDiff = (unreadByUser[b._id] || 0) - (unreadByUser[a._id] || 0);
+      if (unreadDiff) return unreadDiff;
+      const connectedDiff = Number(Boolean(b.isConnected)) - Number(Boolean(a.isConnected));
+      if (connectedDiff) return connectedDiff;
+      const aHasPreview = chatPreview[a._id] && chatPreview[a._id] !== 'Start a conversation';
+      const bHasPreview = chatPreview[b._id] && chatPreview[b._id] !== 'Start a conversation';
+      return Number(bHasPreview) - Number(aHasPreview);
+    });
+  }, [users, unreadByUser, chatPreview]);
+
   const sendTyping = (isTyping) => {
     if (!socket || !selectedUser) return;
     socket.emit('typing', { receiverId: selectedUser._id, senderId: user?.id, isTyping });
@@ -137,15 +157,21 @@ export default function Chat() {
   const handleSendMessage = async (e) => {
     e.preventDefault();
     if (!newMessage.trim() || !selectedUser) return;
+    if (!canSendToSelected) {
+      setSendError('Send a connection request to continue this chat.');
+      return;
+    }
     try {
-      const message = { text: newMessage, receiverId: selectedUser._id, sender: { _id: user?.id }, createdAt: new Date() };
-      if (socket) socket.emit('sendMessage', message);
-      await messageAPI.send({ receiverId: selectedUser._id, text: newMessage });
+      const response = await messageAPI.send({ receiverId: selectedUser._id, text: newMessage });
+      const message = response.data.data;
       setMessages((prev) => [...prev, message]);
-      setChatPreview((prev) => ({ ...prev, [selectedUser._id]: newMessage }));
+      setChatPreview((prev) => ({ ...prev, [selectedUser._id]: message.text }));
+      setChatAccessByUser((prev) => ({ ...prev, [selectedUser._id]: response.data.chatAccess }));
       setNewMessage('');
+      setSendError('');
       sendTyping(false);
     } catch (error) {
+      setSendError(error.userMessage || 'Failed to send message');
       console.error('Failed to send message:', error);
     }
   };
@@ -187,7 +213,7 @@ export default function Chat() {
                   {loading ? (
                     Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton h-14" />)
                   ) : (
-                    users.map((u) => (
+                    sortedUsers.map((u) => (
                       <button
                         key={u._id}
                         onClick={() => {
@@ -204,7 +230,10 @@ export default function Chat() {
                           <div className="flex-1 min-w-0">
                             <div className="flex justify-between gap-2">
                               <p className="truncate font-bold text-slate-950 dark:text-white">{u.name}</p>
-                              {(unreadByUser[u._id] || 0) > 0 && <span className="text-[10px] font-bold bg-rose-500 text-white px-1.5 py-0.5 rounded-full">{unreadByUser[u._id]}</span>}
+                              <div className="flex items-center gap-1">
+                                {u.isConnected && <span className="rounded-full bg-emerald-100 px-1.5 py-0.5 text-[9px] font-black text-emerald-700">Trusted</span>}
+                                {(unreadByUser[u._id] || 0) > 0 && <span className="text-[10px] font-bold bg-rose-500 text-white px-1.5 py-0.5 rounded-full">{unreadByUser[u._id]}</span>}
+                              </div>
                             </div>
                             <p className="truncate text-xs text-slate-600 dark:text-slate-400">{chatPreview[u._id] || 'Start a conversation'}</p>
                           </div>
@@ -234,7 +263,9 @@ export default function Chat() {
                       </div>
                       <div className="min-w-0 flex-1">
                         <p className="truncate font-bold text-white dark:text-white">{selectedUser.name}</p>
-                        <p className="text-xs text-slate-200 dark:text-slate-400">{onlineMap[selectedUser._id] ? 'Online now' : 'Offline'}</p>
+                        <p className="text-xs text-slate-200 dark:text-slate-400">
+                          {selectedUser.isConnected ? 'Trusted connection - unlimited chat' : 'Not connected - one starter message only'}
+                        </p>
                       </div>
                       <Button size="sm" variant="danger" className="shrink-0" onClick={() => setReportOpen(true)}>Report</Button>
                     </div>
@@ -257,15 +288,26 @@ export default function Chat() {
                       <div ref={messagesEndRef} />
                     </div>
 
+                    {!canSendToSelected && (
+                      <div className="border-t border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-800 dark:border-amber-400/20 dark:bg-amber-950/40 dark:text-amber-100">
+                        You already sent a starter message. Connect with {selectedUser.name} to continue chatting and unlock contact details.
+                      </div>
+                    )}
+                    {sendError && (
+                      <div className="border-t border-rose-200 bg-rose-50 px-4 py-3 text-sm font-semibold text-rose-700 dark:border-rose-400/20 dark:bg-rose-950/40 dark:text-rose-100">
+                        {sendError}
+                      </div>
+                    )}
                     <form onSubmit={handleSendMessage} className="flex gap-2 border-t border-slate-300/50 bg-slate-50 p-3 dark:border-slate-700/50 dark:bg-slate-900 sm:gap-3 sm:p-4 shadow-md">
                       <input
                         type="text"
                         value={newMessage}
                         onChange={(e) => onMessageChange(e.target.value)}
-                        placeholder="Write a message"
+                        disabled={!canSendToSelected}
+                        placeholder={canSendToSelected ? 'Write a message' : 'Connect to continue chatting'}
                         className="premium-surface min-w-0 flex-1 px-4 py-3 text-slate-950 placeholder:text-slate-500 dark:placeholder:text-slate-400 dark:text-white bg-slate-50 dark:bg-slate-900"
                       />
-                      <Button variant="gradient" type="submit" className="shrink-0">Send</Button>
+                      <Button variant="gradient" type="submit" disabled={!canSendToSelected} className="shrink-0 disabled:cursor-not-allowed disabled:opacity-60">Send</Button>
                     </form>
 
                     <ReportDialog

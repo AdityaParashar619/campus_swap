@@ -68,11 +68,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('sendMessage', (message) => {
-    if (message?.receiverId) {
-      io.to(`user:${message.receiverId}`).emit('receiveMessage', message);
-    }
-  });
+  // Messages are persisted and authorized through the REST API before the server broadcasts them.
 });
 
 app.locals.io = io;

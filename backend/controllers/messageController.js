@@ -1,7 +1,8 @@
 import { asyncHandler } from '../middleware/errorMiddleware.js';
-import { BadRequest } from '../utils/AppError.js';
+import { BadRequest, Forbidden } from '../utils/AppError.js';
 import Message from '../models/Message.js';
 import Notification from '../models/Notification.js';
+import { getChatAccess } from '../utils/connections.js';
 
 export const sendMessage = asyncHandler(async (req, res) => {
   const { receiverId, text } = req.body;
@@ -10,8 +11,13 @@ export const sendMessage = asyncHandler(async (req, res) => {
     throw new BadRequest('Receiver and text required');
   }
 
+  const access = await getChatAccess(req.user.userId, receiverId);
+  if (!access.canSend) {
+    throw new Forbidden('Connect with this student to continue the conversation.');
+  }
+
   const message = await Message.create({ sender: req.user.userId, receiver: receiverId, text });
-  await message.populate('sender receiver', 'name email');
+  await message.populate('sender receiver', 'name profilePicture');
 
   const io = req.app.locals.io;
   if (io) io.to(`user:${receiverId}`).emit('receiveMessage', message);
@@ -24,21 +30,25 @@ export const sendMessage = asyncHandler(async (req, res) => {
     metadata: { senderId: req.user.userId, action: 'reply_chat' }
   });
 
-  res.status(201).json({ success: true, message: 'Message sent', data: message });
+  const updatedAccess = await getChatAccess(req.user.userId, receiverId);
+  res.status(201).json({ success: true, message: 'Message sent', data: message, chatAccess: updatedAccess });
 });
 
 export const getMessages = asyncHandler(async (req, res) => {
   const { userId } = req.params;
   const currentUserId = req.user.userId;
 
-  const messages = await Message.find({
-    $or: [
-      { sender: currentUserId, receiver: userId },
-      { sender: userId, receiver: currentUserId }
-    ]
-  })
-    .populate('sender receiver', 'name email')
-    .sort({ createdAt: 1 });
+  const [messages, access] = await Promise.all([
+    Message.find({
+      $or: [
+        { sender: currentUserId, receiver: userId },
+        { sender: userId, receiver: currentUserId }
+      ]
+    })
+      .populate('sender receiver', 'name profilePicture')
+      .sort({ createdAt: 1 }),
+    getChatAccess(currentUserId, userId)
+  ]);
 
-  res.json({ success: true, data: messages });
+  res.json({ success: true, data: messages, chatAccess: access });
 });
