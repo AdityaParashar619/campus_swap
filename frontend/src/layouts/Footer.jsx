@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import ReportDialog from '../components/ReportDialog';
 import { useAuth } from '../hooks/useAuth';
+import satiLogo from '../assets/sati-logo.jpg';
 
 export default function Footer() {
   const { user } = useAuth();
@@ -12,10 +13,21 @@ export default function Footer() {
       <div className="section-container flex flex-col gap-7 md:flex-row md:items-center md:justify-between">
         <div>
           <div className="flex items-center gap-2">
-            <span className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-teal-400 via-blue-500 to-amber-400 text-sm font-black text-slate-950">CS</span>
-            <p className="text-lg font-black tracking-tight text-white">CampusSwap</p>
+            <img src={satiLogo} alt="SATI logo" className="h-10 w-10 rounded-lg border border-white/15 bg-white object-contain p-1" />
+            <div>
+              <p className="text-lg font-black tracking-tight text-white">SATI Swap</p>
+              <p className="text-xs font-semibold text-slate-400">Samrat Ashok Technological Institute</p>
+            </div>
           </div>
           <p className="mt-3 max-w-md text-sm leading-relaxed text-slate-300">Campus marketplace, requests, notes, chat, connections, and admin moderation in one student platform.</p>
+          <a
+            className="mt-3 inline-flex rounded-full border border-emerald-300/30 bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-100 hover:bg-emerald-400/15"
+            href="https://www.satiengg.in/"
+            target="_blank"
+            rel="noreferrer"
+          >
+            SATI College Verified
+          </a>
         </div>
 
         <div className="flex flex-wrap items-center gap-3 text-sm">

@@ -2,6 +2,8 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { CountUp, PageTransition, Reveal, Stagger, StaggerItem } from '../components/ui';
+import satiCampus from '../assets/sati-campus.png';
+import satiLogo from '../assets/sati-logo.jpg';
 
 const faqs = [
   {
@@ -27,8 +29,11 @@ export default function Landing() {
         <motion.nav initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} className="sticky top-0 z-50 border-b border-white/10 bg-slate-950 text-white shadow-[0_12px_30px_rgba(2,6,23,0.28)]">
           <div className="section-container flex items-center justify-between gap-3 py-3">
             <Link to="/" className="flex items-center gap-2">
-              <span className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-teal-400 via-blue-500 to-amber-400 text-sm font-black text-slate-950">CS</span>
-              <span className="text-xl font-black tracking-tight">CampusSwap</span>
+              <img src={satiLogo} alt="SATI logo" className="h-10 w-10 rounded-lg border border-white/15 bg-white object-contain p-1" />
+              <span className="leading-tight">
+                <span className="block text-lg font-black tracking-tight">SATI Swap</span>
+                <span className="hidden text-[10px] font-semibold uppercase tracking-wide text-slate-300 sm:block">Samrat Ashok Technological Institute</span>
+              </span>
             </Link>
             <div className="flex shrink-0 gap-2 sm:gap-3">
               <Link to="/login" className="rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/10 sm:px-4">Login</Link>
@@ -40,15 +45,15 @@ export default function Landing() {
         <section className="border-b border-slate-200/70 bg-[linear-gradient(135deg,rgba(15,118,110,0.10),rgba(255,255,255,0)_32%),linear-gradient(315deg,rgba(245,158,11,0.10),rgba(255,255,255,0)_36%)] pb-24 pt-16 md:pb-28 md:pt-24">
           <div className="section-container grid items-center gap-10 lg:grid-cols-2 lg:gap-12">
             <Stagger className="space-y-6">
-              <StaggerItem><span className="chip">Trusted campus-only ecosystem</span></StaggerItem>
+              <StaggerItem><span className="chip">SATI verified campus-only ecosystem</span></StaggerItem>
               <StaggerItem>
                 <h1 className="text-hero-lg max-w-xl">
-                  Student Marketplace,
+                  SATI Student Marketplace,
                   <span className="bg-gradient-to-r from-teal-700 via-blue-700 to-amber-600 bg-clip-text text-transparent"> Networking, Notes</span>
                   {' '}and Real-Time Chat.
                 </h1>
               </StaggerItem>
-              <StaggerItem><p className="max-w-lg text-lg leading-relaxed text-slate-600">CampusSwap brings buying, selling, borrowing, reports, and peer collaboration into one production-ready student platform.</p></StaggerItem>
+              <StaggerItem><p className="max-w-lg text-lg leading-relaxed text-slate-600">Built for Samrat Ashok Technological Institute (SATI), Vidisha: buying, selling, borrowing, reports, and peer collaboration in one student platform.</p></StaggerItem>
               <StaggerItem>
                 <div className="flex flex-wrap gap-4">
                   <Link to="/signup" className="rounded-lg bg-slate-950 px-7 py-3 font-black text-white shadow-lg shadow-slate-950/20">Start Free</Link>
@@ -88,9 +93,14 @@ export default function Landing() {
           </div>
         </section>
 
-        <section className="pb-20">
-          <div className="section-container">
-            <Reveal className="text-center mb-12"><h2 className="text-section-title">Built For A Real Student Ecosystem</h2></Reveal>
+        <section className="relative overflow-hidden py-20">
+          <img src={satiCampus} alt="" className="absolute inset-0 h-full w-full object-cover opacity-[0.14]" />
+          <div className="absolute inset-0 bg-white/82 backdrop-blur-[1px] dark:bg-slate-950/86" />
+          <div className="section-container relative z-10">
+            <Reveal className="text-center mb-12">
+              <p className="chip mb-4">For SATI Vidisha</p>
+              <h2 className="text-section-title">Built For A Real Student Ecosystem</h2>
+            </Reveal>
             <Stagger className="grid md:grid-cols-2 xl:grid-cols-4 gap-5">
               {[
                 ['Marketplace', 'Sell, swap, and discover trusted student deals with premium search.'],
@@ -166,8 +176,14 @@ export default function Landing() {
         <footer className="border-t border-slate-800 bg-slate-950 py-10 text-white">
           <div className="section-container grid md:grid-cols-4 gap-6">
             <div>
-              <p className="text-lg font-black text-white">CampusSwap</p>
-              <p className="mt-2 text-sm text-slate-300">Premium student ecosystem platform.</p>
+              <div className="flex items-center gap-2">
+                <img src={satiLogo} alt="SATI logo" className="h-10 w-10 rounded-lg border border-white/15 bg-white object-contain p-1" />
+                <p className="text-lg font-black text-white">SATI Swap</p>
+              </div>
+              <p className="mt-2 text-sm text-slate-300">For Samrat Ashok Technological Institute, Vidisha.</p>
+              <a className="mt-3 inline-flex rounded-full border border-emerald-300/30 bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-100" href="https://www.satiengg.in/" target="_blank" rel="noreferrer">
+                SATI College Verified
+              </a>
             </div>
             <div>
               <p className="font-semibold mb-2">Platform</p>
