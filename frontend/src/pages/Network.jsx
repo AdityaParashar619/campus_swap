@@ -105,26 +105,26 @@ export default function Network() {
               <p className="text-body-sm">Find students, send requests, and accept incoming connections.</p>
             </div>
 
-            {message && <p className="rounded-lg bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700 dark:bg-blue-500/15 dark:text-blue-200">{message}</p>}
+            {message && <p className="rounded-lg bg-cyan-50 px-4 py-3 text-sm font-medium text-cyan-800 dark:bg-cyan-950/50 dark:text-cyan-200 border border-cyan-300/30 dark:border-cyan-400/20">{message}</p>}
 
             <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
-              <PremiumCard hover={false} className="border-cyan-300/25 bg-white/85 dark:bg-slate-950/75">
+              <PremiumCard hover={false} className="border-cyan-300/25 bg-white/90 dark:bg-slate-900/85 shadow-sm">
                 <div className="mb-5 flex items-center justify-between gap-3">
                   <div>
                     <h2 className="text-feature-title">Incoming Requests</h2>
                     <p className="text-body-sm">Students waiting for your confirmation.</p>
                   </div>
-                  <span className="chip">{pendingIncoming.length} pending</span>
+                  <span className="chip bg-cyan-100 text-cyan-800 dark:bg-cyan-950/50 dark:text-cyan-200">{pendingIncoming.length} pending</span>
                 </div>
                 {pendingIncoming.length === 0 ? (
                   <p className="text-body-sm">No incoming connection requests right now.</p>
                 ) : (
                   <div className="space-y-3">
                     {pendingIncoming.map((connection) => (
-                      <div key={connection._id} className="flex flex-col gap-3 rounded-lg border border-slate-200/50 bg-white/60 p-4 dark:border-slate-700/60 dark:bg-slate-900/55 md:flex-row md:items-center md:justify-between">
+                      <div key={connection._id} className="flex flex-col gap-3 rounded-lg border border-cyan-300/30 bg-cyan-50/60 p-4 dark:border-cyan-400/20 dark:bg-cyan-950/30 md:flex-row md:items-center md:justify-between">
                         <div>
-                          <p className="font-semibold">{connection.requester?.name || 'Student'}</p>
-                          <p className="text-body-sm">{connection.requester?.course || 'Student'} {connection.requester?.yearSemester || ''}</p>
+                          <p className="font-semibold text-slate-900 dark:text-white">{connection.requester?.name || 'Student'}</p>
+                          <p className="text-body-sm text-slate-600 dark:text-slate-300">{connection.requester?.course || 'Student'} {connection.requester?.yearSemester || ''}</p>
                         </div>
                         <div className="flex gap-2">
                           <Button size="sm" variant="gradient" onClick={() => respondToRequest(connection._id, 'accepted')}>Accept</Button>
@@ -136,7 +136,7 @@ export default function Network() {
                 )}
               </PremiumCard>
 
-              <PremiumCard hover={false}>
+              <PremiumCard hover={false} className="border-cyan-300/25 bg-white/90 dark:bg-slate-900/85 shadow-sm">
                 <h2 className="text-feature-title mb-4">Connection Status</h2>
                 <div className="grid grid-cols-3 gap-3">
                   {[
@@ -144,19 +144,19 @@ export default function Network() {
                     ['Sent', pendingOutgoing.length],
                     ['Received', pendingIncoming.length]
                   ].map(([label, value]) => (
-                    <div key={label} className="rounded-lg border border-slate-200/50 bg-white/60 p-3 text-center dark:border-slate-700/60 dark:bg-slate-900/55">
-                      <p className="text-2xl font-black">{value}</p>
-                      <p className="mt-1 text-xs font-semibold text-slate-500">{label}</p>
+                    <div key={label} className="rounded-lg border border-cyan-300/30 bg-cyan-50/70 p-3 text-center dark:border-cyan-400/20 dark:bg-cyan-950/30">
+                      <p className="text-2xl font-black text-slate-900 dark:text-cyan-100">{value}</p>
+                      <p className="mt-1 text-xs font-semibold text-slate-600 dark:text-slate-300">{label}</p>
                     </div>
                   ))}
                 </div>
                 {pendingOutgoing.length > 0 && (
                   <div className="mt-5 space-y-2">
-                    <p className="text-sm font-semibold">Sent requests</p>
+                    <p className="text-sm font-semibold text-slate-900 dark:text-white">Sent requests</p>
                     {pendingOutgoing.slice(0, 5).map((connection) => (
-                      <div key={connection._id} className="flex items-center justify-between rounded-lg bg-slate-100/70 px-3 py-2 text-sm dark:bg-slate-900/70">
-                        <span>{connection.recipient?.name || 'Student'}</span>
-                        <span className="text-xs font-bold text-amber-600 dark:text-amber-300">Pending</span>
+                      <div key={connection._id} className="flex items-center justify-between rounded-lg bg-amber-50/70 px-3 py-2 text-sm dark:bg-amber-950/30 border border-amber-300/30 dark:border-amber-400/20">
+                        <span className="text-slate-900 dark:text-white">{connection.recipient?.name || 'Student'}</span>
+                        <span className="text-xs font-bold text-amber-700 dark:text-amber-300">Pending</span>
                       </div>
                     ))}
                   </div>
@@ -173,24 +173,24 @@ export default function Network() {
               ) : (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
                   {students.map((student) => (
-                    <PremiumCard key={student._id} className="flex h-full flex-col justify-between">
+                    <PremiumCard key={student._id} className="flex h-full flex-col justify-between border-cyan-300/25 bg-white/90 dark:bg-slate-900/85 shadow-sm">
                       <div>
                         <div className="mb-3 flex items-start justify-between gap-3">
                           <div>
-                            <h3 className="text-feature-title">{student.name}</h3>
-                            <p className="text-body-sm">{student.course || 'Student'} {student.yearSemester || ''}</p>
+                            <h3 className="text-feature-title text-slate-900 dark:text-white">{student.name}</h3>
+                            <p className="text-body-sm text-slate-600 dark:text-slate-300">{student.course || 'Student'} {student.yearSemester || ''}</p>
                           </div>
-                          <span className="chip">{student.trustScore || 0} trust</span>
+                          <span className="chip bg-cyan-100 text-cyan-800 dark:bg-cyan-950/50 dark:text-cyan-200">{student.trustScore || 0} trust</span>
                         </div>
-                        <p className="text-body-sm line-clamp-3">{student.bio || 'No bio added yet.'}</p>
+                        <p className="text-body-sm line-clamp-3 text-slate-700 dark:text-slate-300">{student.bio || 'No bio added yet.'}</p>
                       </div>
                       <div className="mt-5 flex items-center justify-between gap-3">
-                        <span className="text-xs text-slate-500">{student.collegeName || 'CampusSwap'}</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">{student.collegeName || 'CampusSwap'}</span>
                         {renderConnectionAction(student)}
                       </div>
                     </PremiumCard>
                   ))}
-                  {students.length === 0 && <PremiumCard><p className="text-body-sm">No other students found yet.</p></PremiumCard>}
+                  {students.length === 0 && <PremiumCard className="border-cyan-300/25 bg-white/90 dark:bg-slate-900/85 shadow-sm"><p className="text-body-sm">No other students found yet.</p></PremiumCard>}
                 </div>
               )}
             </div>
