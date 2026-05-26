@@ -166,7 +166,7 @@ export default function Chat() {
             </div>
 
             <div className="grid min-h-[calc(100vh-170px)] gap-4 lg:grid-cols-[340px_minmax(0,1fr)] lg:gap-6">
-              <PremiumCard className={`${showMobileList ? 'flex' : 'hidden'} min-h-[calc(100vh-190px)] flex-col overflow-hidden border-slate-200/70 bg-white/95 p-3 dark:border-slate-800 dark:bg-slate-950/85 sm:p-4 lg:flex lg:min-h-[72vh]`} hover={false}>
+              <PremiumCard className={`${showMobileList ? 'flex' : 'hidden'} min-h-[calc(100vh-190px)] flex-col overflow-hidden border-cyan-300/25 bg-white/85 p-3 dark:border-slate-700/50 dark:bg-slate-900/90 sm:p-4 lg:flex lg:min-h-[72vh] shadow-sm`} hover={false}>
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-black text-slate-950 dark:text-white">Conversations</p>
@@ -188,7 +188,7 @@ export default function Chat() {
                           setSelectedUser(u);
                           setShowMobileList(false);
                         }}
-                        className={`w-full rounded-lg border p-3 text-left transition ${selectedUser?._id === u._id ? 'border-teal-300 bg-teal-50 text-slate-950 shadow-sm dark:border-teal-400/40 dark:bg-teal-400/10 dark:text-white' : 'border-slate-200/70 bg-white hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900/70 dark:hover:bg-slate-900'}`}
+                        className={`w-full rounded-lg border p-3 text-left transition ${selectedUser?._id === u._id ? 'border-cyan-400/60 bg-cyan-50 text-slate-950 shadow-md dark:border-cyan-400/40 dark:bg-cyan-950/40 dark:text-cyan-100' : 'border-slate-200/60 bg-white/70 hover:border-cyan-300/50 hover:bg-cyan-50/30 dark:border-slate-700/70 dark:bg-slate-800/60 dark:hover:border-cyan-400/30 dark:hover:bg-slate-800/80'}`}
                       >
                         <div className="flex items-center gap-3">
                           <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500 via-blue-600 to-slate-900 font-black text-white">
@@ -209,7 +209,7 @@ export default function Chat() {
                 </div>
               </PremiumCard>
 
-              <PremiumCard className={`${selectedUser || !showMobileList ? 'flex' : 'hidden'} min-h-[calc(100vh-190px)] flex-col overflow-hidden border-slate-200/70 bg-white p-0 dark:border-slate-800 dark:bg-slate-950 lg:flex lg:min-h-[72vh]`} hover={false}>
+              <PremiumCard className={`${selectedUser || !showMobileList ? 'flex' : 'hidden'} min-h-[calc(100vh-190px)] flex-col overflow-hidden border-cyan-300/25 bg-white/95 p-0 dark:border-slate-700/50 dark:bg-slate-900/85 lg:flex lg:min-h-[72vh] shadow-sm`} hover={false}>
                 {!selectedUser ? (
                   <div className="grid flex-1 place-items-center p-8 text-center text-slate-500">
                     <div>
@@ -220,7 +220,7 @@ export default function Chat() {
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-3 border-b border-slate-200/70 bg-slate-950 px-3 py-3 text-white dark:border-slate-800 sm:px-5 sm:py-4">
+                    <div className="flex items-center gap-3 border-b border-slate-200/70 bg-gradient-to-r from-slate-900 to-slate-800 px-3 py-3 text-white dark:border-slate-700/50 dark:from-slate-800 dark:to-slate-900 sm:px-5 sm:py-4">
                       <button className="rounded-lg border border-white/15 px-3 py-2 text-sm font-bold lg:hidden" onClick={() => setShowMobileList(true)}>Back</button>
                       <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-400 via-blue-500 to-amber-400 font-black text-slate-950">
                         {getInitials(selectedUser.name)}
@@ -233,7 +233,7 @@ export default function Chat() {
                       <Button size="sm" variant="danger" className="shrink-0" onClick={() => setReportOpen(true)}>Report</Button>
                     </div>
 
-                    <div className="flex-1 space-y-3 overflow-y-auto bg-slate-100/80 px-3 py-4 dark:bg-slate-900/70 sm:px-5">
+                    <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50/90 px-3 py-4 dark:bg-slate-800/70 sm:px-5">
                       {messages.map((msg, i) => {
                         const own = (msg.sender?._id || msg.sender?.id) === user?.id;
                         return (
@@ -251,7 +251,7 @@ export default function Chat() {
                       <div ref={messagesEndRef} />
                     </div>
 
-                    <form onSubmit={handleSendMessage} className="flex gap-2 border-t border-slate-200/70 bg-white p-3 dark:border-slate-800 dark:bg-slate-950 sm:gap-3 sm:p-4">
+                    <form onSubmit={handleSendMessage} className="flex gap-2 border-t border-slate-200/70 bg-white/95 p-3 dark:border-slate-700/50 dark:bg-slate-900/90 sm:gap-3 sm:p-4">
                       <input
                         type="text"
                         value={newMessage}
