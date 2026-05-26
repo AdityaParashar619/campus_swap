@@ -15,7 +15,7 @@ export default function Footer() {
           <div className="flex items-center gap-2">
             <img src={satiLogo} alt="SATI logo" className="h-10 w-10 rounded-lg border border-white/15 bg-white object-contain p-1" />
             <div>
-              <p className="text-lg font-black tracking-tight text-white">SATI Swap</p>
+              <p className="text-lg font-black tracking-tight text-white">CampusSwap</p>
               <p className="text-xs font-semibold text-slate-400">Samrat Ashok Technological Institute</p>
             </div>
           </div>

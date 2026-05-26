@@ -31,7 +31,7 @@ export default function Landing() {
             <Link to="/" className="flex items-center gap-2">
               <img src={satiLogo} alt="SATI logo" className="h-10 w-10 rounded-lg border border-white/15 bg-white object-contain p-1" />
               <span className="leading-tight">
-                <span className="block text-lg font-black tracking-tight">SATI Swap</span>
+                <span className="block text-lg font-black tracking-tight">CampusSwap</span>
                 <span className="hidden text-[10px] font-semibold uppercase tracking-wide text-slate-300 sm:block">Samrat Ashok Technological Institute</span>
               </span>
             </Link>
@@ -48,7 +48,7 @@ export default function Landing() {
               <StaggerItem><span className="chip">SATI verified campus-only ecosystem</span></StaggerItem>
               <StaggerItem>
                 <h1 className="text-hero-lg max-w-xl">
-                  SATI Student Marketplace,
+                  CampusSwap Student Marketplace,
                   <span className="bg-gradient-to-r from-teal-700 via-blue-700 to-amber-600 bg-clip-text text-transparent"> Networking, Notes</span>
                   {' '}and Real-Time Chat.
                 </h1>
@@ -178,7 +178,7 @@ export default function Landing() {
             <div>
               <div className="flex items-center gap-2">
                 <img src={satiLogo} alt="SATI logo" className="h-10 w-10 rounded-lg border border-white/15 bg-white object-contain p-1" />
-                <p className="text-lg font-black text-white">SATI Swap</p>
+                <p className="text-lg font-black text-white">CampusSwap</p>
               </div>
               <p className="mt-2 text-sm text-slate-300">For Samrat Ashok Technological Institute, Vidisha.</p>
               <a className="mt-3 inline-flex rounded-full border border-emerald-300/30 bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-100" href="https://www.satiengg.in/" target="_blank" rel="noreferrer">
