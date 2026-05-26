@@ -22,6 +22,20 @@ export default function Profile() {
   const [stats, setStats] = useState({ listingsCount: 0, notesCount: 0, requestsCount: 0, connectionsCount: 0, messagesCount: 0 });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [avatarFailed, setAvatarFailed] = useState(false);
+
+  const avatarUrl = (profile.profilePicture || user?.profilePicture || '').trim();
+  const displayName = profile.name || user?.name || 'Student';
+  const initials = displayName
+    .split(' ')
+    .map((part) => part.charAt(0))
+    .join('')
+    .slice(0, 2)
+    .toUpperCase();
+
+  useEffect(() => {
+    setAvatarFailed(false);
+  }, [avatarUrl]);
 
   useEffect(() => {
     (async () => {
@@ -51,6 +65,7 @@ export default function Profile() {
     try {
       const payload = {
         ...profile,
+        profilePicture: profile.profilePicture.trim(),
         interests: profile.interests.split(',').map((v) => v.trim()).filter(Boolean),
         skills: profile.skills.split(',').map((v) => v.trim()).filter(Boolean)
       };
@@ -79,10 +94,20 @@ export default function Profile() {
               <div className="grid lg:grid-cols-3 gap-6">
                 <PremiumCard className="lg:col-span-1">
                   <div className="text-center">
-                    <div className="w-24 h-24 mx-auto rounded-2xl bg-gradient-to-br from-blue-600 to-violet-500 flex items-center justify-center text-white text-3xl font-black mb-4">
-                      {(profile.name || user?.name || '?').charAt(0).toUpperCase()}
+                    <div className="w-24 h-24 mx-auto rounded-2xl bg-gradient-to-br from-blue-600 to-violet-500 flex items-center justify-center text-white text-3xl font-black mb-4 overflow-hidden ring-4 ring-white/70 shadow-xl">
+                      {avatarUrl && !avatarFailed ? (
+                        <img
+                          src={avatarUrl}
+                          alt={`${displayName} profile`}
+                          className="h-full w-full object-cover"
+                          referrerPolicy="no-referrer"
+                          onError={() => setAvatarFailed(true)}
+                        />
+                      ) : (
+                        <span>{initials || '?'}</span>
+                      )}
                     </div>
-                    <h2 className="text-feature-title mb-1">{profile.name || user?.name}</h2>
+                    <h2 className="text-feature-title mb-1">{displayName}</h2>
                     <p className="text-body-sm">{user?.email}</p>
                     <div className="mt-4 text-xs inline-flex px-3 py-1 rounded-full bg-emerald-100 text-emerald-700">Trust Score: {user?.trustScore ?? 0}</div>
                   </div>
@@ -120,6 +145,10 @@ export default function Profile() {
                         className="px-4 py-3 rounded-xl border border-slate-300/30 bg-white/60"
                       />
                     ))}
+
+                    <p className="md:col-span-2 -mt-2 text-xs text-slate-500">
+                      Use a public direct image link, such as a JPG, PNG, or WebP URL.
+                    </p>
 
                     <textarea
                       value={profile.bio}
