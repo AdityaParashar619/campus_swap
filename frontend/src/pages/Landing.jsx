@@ -23,39 +23,36 @@ export default function Landing() {
 
   return (
     <PageTransition>
-      <div className="min-h-screen relative overflow-hidden">
-        <div className="pointer-events-none absolute inset-0 opacity-80">
-          <motion.div className="absolute -top-28 -left-24 h-96 w-96 rounded-full bg-blue-400/20 blur-3xl" animate={{ x: [0, 18, 0], y: [0, 10, 0] }} transition={{ duration: 10, repeat: Infinity }} />
-          <motion.div className="absolute top-24 -right-20 h-[28rem] w-[28rem] rounded-full bg-violet-500/20 blur-3xl" animate={{ x: [0, -18, 0], y: [0, -10, 0] }} transition={{ duration: 12, repeat: Infinity }} />
-          <motion.div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-cyan-400/20 blur-3xl" animate={{ y: [0, -10, 0] }} transition={{ duration: 9, repeat: Infinity }} />
-        </div>
-
-        <motion.nav initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} className="sticky top-0 z-50 border-b border-slate-200/20 bg-white/60 backdrop-blur-2xl">
-          <div className="section-container py-4 flex justify-between items-center">
-            <div className="text-2xl font-black tracking-tight bg-gradient-to-r from-blue-600 to-violet-500 bg-clip-text text-transparent">CampusSwap</div>
+      <div className="relative min-h-screen overflow-hidden">
+        <motion.nav initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} className="sticky top-0 z-50 border-b border-white/10 bg-slate-950 text-white shadow-[0_12px_30px_rgba(2,6,23,0.28)]">
+          <div className="section-container flex items-center justify-between py-3">
+            <Link to="/" className="flex items-center gap-2">
+              <span className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-teal-400 via-blue-500 to-amber-400 text-sm font-black text-slate-950">CS</span>
+              <span className="text-xl font-black tracking-tight">CampusSwap</span>
+            </Link>
             <div className="flex gap-3">
-              <Link to="/login" className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-700 hover:text-blue-600 transition">Login</Link>
-              <Link to="/signup" className="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-violet-600 shadow-lg shadow-blue-500/30">Get Started</Link>
+              <Link to="/login" className="rounded-lg border border-white/15 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/10">Login</Link>
+              <Link to="/signup" className="rounded-lg bg-amber-400 px-5 py-2 text-sm font-black text-slate-950 shadow-lg shadow-amber-500/20 hover:bg-amber-300">Get Started</Link>
             </div>
           </div>
         </motion.nav>
 
-        <section className="pt-16 pb-24 md:pt-24 md:pb-28">
+        <section className="border-b border-slate-200/70 bg-[linear-gradient(135deg,rgba(15,118,110,0.10),rgba(255,255,255,0)_32%),linear-gradient(315deg,rgba(245,158,11,0.10),rgba(255,255,255,0)_36%)] pb-24 pt-16 md:pb-28 md:pt-24">
           <div className="section-container grid lg:grid-cols-2 gap-12 items-center">
             <Stagger className="space-y-6">
               <StaggerItem><span className="chip">Trusted campus-only ecosystem</span></StaggerItem>
               <StaggerItem>
                 <h1 className="text-hero-lg max-w-xl">
                   Student Marketplace,
-                  <span className="bg-gradient-to-r from-blue-600 via-violet-600 to-cyan-500 bg-clip-text text-transparent"> Networking, Notes</span>
+                  <span className="bg-gradient-to-r from-teal-700 via-blue-700 to-amber-600 bg-clip-text text-transparent"> Networking, Notes</span>
                   {' '}and Real-Time Chat.
                 </h1>
               </StaggerItem>
-              <StaggerItem><p className="text-lg text-slate-600 max-w-lg leading-relaxed">CampusSwap brings buying, selling, borrowing, and peer collaboration into one premium student platform.</p></StaggerItem>
+              <StaggerItem><p className="max-w-lg text-lg leading-relaxed text-slate-600">CampusSwap brings buying, selling, borrowing, reports, and peer collaboration into one production-ready student platform.</p></StaggerItem>
               <StaggerItem>
                 <div className="flex flex-wrap gap-4">
-                  <Link to="/signup" className="px-7 py-3 rounded-xl text-white font-semibold bg-gradient-to-r from-blue-600 to-violet-600 shadow-lg shadow-violet-500/25">Start Free</Link>
-                  <Link to="/login" className="px-7 py-3 rounded-xl font-semibold border border-slate-300/40 bg-white/65 text-slate-700">Explore Demo</Link>
+                  <Link to="/signup" className="rounded-lg bg-slate-950 px-7 py-3 font-black text-white shadow-lg shadow-slate-950/20">Start Free</Link>
+                  <Link to="/login" className="rounded-lg border border-slate-300/70 bg-white px-7 py-3 font-bold text-slate-800 shadow-sm hover:bg-slate-50">Explore Demo</Link>
                 </div>
               </StaggerItem>
               <StaggerItem>
@@ -68,17 +65,21 @@ export default function Landing() {
             </Stagger>
 
             <Reveal className="relative" y={0}>
-              <div className="premium-card p-6 md:p-8">
+              <div className="premium-card border-slate-200/80 bg-white p-6 md:p-8">
+                <div className="mb-5 flex items-center justify-between">
+                  <p className="font-bold text-slate-900">Live campus board</p>
+                  <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-black text-emerald-700">Verified</span>
+                </div>
                 <div className="space-y-4">
                   {[
                     ['Macroeconomics Notes', 'PDF - Semester 4', 'INR 120'],
                     ['Scientific Calculator', 'Excellent - Hostel B', 'INR 700'],
                     ['Need Charger Tonight', 'Request - Urgent', 'Bounty INR 250']
                   ].map((card, idx) => (
-                    <motion.div key={card[0]} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 * idx }} whileHover={{ y: -4 }} className="rounded-2xl border border-slate-200/40 bg-white/80 p-4">
+                    <motion.div key={card[0]} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 * idx }} whileHover={{ y: -4 }} className="rounded-lg border border-slate-200 bg-slate-50/80 p-4">
                       <p className="font-bold text-slate-900">{card[0]}</p>
                       <p className="text-sm text-slate-500 mt-1">{card[1]}</p>
-                      <p className="text-sm font-semibold text-blue-600 mt-2">{card[2]}</p>
+                      <p className="mt-2 text-sm font-bold text-teal-700">{card[2]}</p>
                     </motion.div>
                   ))}
                 </div>
@@ -114,7 +115,7 @@ export default function Landing() {
               ['03', 'Connect and close', 'Message peers in real time and complete safer exchanges.']
             ].map((step, idx) => (
               <Reveal key={step[0]} delay={idx * 0.08} className="premium-card p-6">
-                <p className="text-4xl font-black bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">{step[0]}</p>
+                <p className="bg-gradient-to-r from-teal-700 via-blue-700 to-amber-600 bg-clip-text text-4xl font-black text-transparent">{step[0]}</p>
                 <h3 className="mt-2 text-feature-title">{step[1]}</h3>
                 <p className="text-body-sm mt-2">{step[2]}</p>
               </Reveal>
@@ -152,39 +153,39 @@ export default function Landing() {
 
         <section className="pb-20">
           <div className="section-container">
-            <div className="premium-card p-8 md:p-10 text-center bg-gradient-to-r from-blue-600/95 via-violet-600/95 to-cyan-600/95 text-white border-0">
+            <div className="premium-card border-0 bg-slate-950 p-8 text-center text-white md:p-10">
               <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight">Ready to launch CampusSwap on your campus?</h2>
               <p className="mt-4 text-white/85 max-w-2xl mx-auto">From listings and notes to networking and moderation, this is a complete student platform foundation.</p>
               <div className="mt-8">
-                <Link to="/signup" className="inline-flex rounded-xl bg-white text-slate-900 font-bold px-7 py-3">Create Account</Link>
+                <Link to="/signup" className="inline-flex rounded-lg bg-amber-400 px-7 py-3 font-black text-slate-950 hover:bg-amber-300">Create Account</Link>
               </div>
             </div>
           </div>
         </section>
 
-        <footer className="py-10 border-t border-slate-200/20">
+        <footer className="border-t border-slate-800 bg-slate-950 py-10 text-white">
           <div className="section-container grid md:grid-cols-4 gap-6">
             <div>
-              <p className="font-black text-lg bg-gradient-to-r from-blue-600 to-violet-500 bg-clip-text text-transparent">CampusSwap</p>
-              <p className="text-body-sm mt-2">Premium student ecosystem platform.</p>
+              <p className="text-lg font-black text-white">CampusSwap</p>
+              <p className="mt-2 text-sm text-slate-300">Premium student ecosystem platform.</p>
             </div>
             <div>
               <p className="font-semibold mb-2">Platform</p>
-              <p className="text-body-sm">Marketplace</p>
-              <p className="text-body-sm">Notes</p>
-              <p className="text-body-sm">Chat</p>
+              <p className="text-sm text-slate-300">Marketplace</p>
+              <p className="text-sm text-slate-300">Notes</p>
+              <p className="text-sm text-slate-300">Chat</p>
             </div>
             <div>
               <p className="font-semibold mb-2">Community</p>
-              <p className="text-body-sm">Connections</p>
-              <p className="text-body-sm">Requests</p>
-              <p className="text-body-sm">Moderation</p>
+              <p className="text-sm text-slate-300">Connections</p>
+              <p className="text-sm text-slate-300">Requests</p>
+              <p className="text-sm text-slate-300">Moderation</p>
             </div>
             <div>
               <p className="font-semibold mb-2">Access</p>
-              <p className="text-body-sm">Login</p>
-              <p className="text-body-sm">Signup</p>
-              <p className="text-body-sm">Admin</p>
+              <p className="text-sm text-slate-300">Login</p>
+              <p className="text-sm text-slate-300">Signup</p>
+              <p className="text-sm text-slate-300">Admin</p>
             </div>
           </div>
         </footer>
