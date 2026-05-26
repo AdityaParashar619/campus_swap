@@ -21,7 +21,7 @@ export const sendMessage = asyncHandler(async (req, res) => {
     type: 'message',
     title: 'New message',
     body: `${message.sender?.name || 'A student'} sent you a message.`,
-    metadata: { senderId: req.user.userId }
+    metadata: { senderId: req.user.userId, action: 'reply_chat' }
   });
 
   res.status(201).json({ success: true, message: 'Message sent', data: message });

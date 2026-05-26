@@ -6,10 +6,12 @@ import { PageLoader } from './components/ui';
 import { useAuth } from './hooks/useAuth';
 
 const Admin = lazy(() => import('./pages/Admin'));
+const About = lazy(() => import('./pages/About'));
 const Bounties = lazy(() => import('./pages/Bounties'));
 const Chat = lazy(() => import('./pages/Chat'));
 const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Error = lazy(() => import('./pages/Error'));
+const Feedback = lazy(() => import('./pages/Feedback'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const Landing = lazy(() => import('./pages/Landing'));
 const Listings = lazy(() => import('./pages/Listings'));
@@ -54,6 +56,8 @@ function AppContent() {
           <Route path="/bounties" element={<ProtectedRoute><Bounties /></ProtectedRoute>} />
           <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+          <Route path="/about" element={<ProtectedRoute><About /></ProtectedRoute>} />
+          <Route path="/feedback" element={<ProtectedRoute><Feedback /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
           <Route path="/error" element={<Error />} />

@@ -16,7 +16,30 @@ export const sendConnectionRequest = asyncHandler(async (req, res) => {
       { requester: recipientId, recipient: req.user.userId }
     ]
   });
-  if (existing) return res.json({ success: true, message: 'Connection request already sent', data: existing });
+  if (existing?.status === 'accepted') {
+    return res.json({ success: true, message: 'You are already connected', data: existing });
+  }
+
+  if (existing?.status === 'pending') {
+    return res.json({ success: true, message: 'Connection request already pending', data: existing });
+  }
+
+  if (existing?.status === 'rejected') {
+    existing.requester = req.user.userId;
+    existing.recipient = recipientId;
+    existing.status = 'pending';
+    await existing.save();
+
+    await Notification.create({
+      user: recipientId,
+      type: 'connection',
+      title: 'New connection request',
+      body: 'A student sent you a connection request.',
+      metadata: { connectionId: existing._id, requesterId: req.user.userId, action: 'open_network' }
+    });
+
+    return res.json({ success: true, message: 'Connection request sent again', data: existing });
+  }
 
   const connection = await Connection.create({ requester: req.user.userId, recipient: recipientId });
 
@@ -25,7 +48,7 @@ export const sendConnectionRequest = asyncHandler(async (req, res) => {
     type: 'connection',
     title: 'New connection request',
     body: 'A student sent you a connection request.',
-    metadata: { connectionId: connection._id, requesterId: req.user.userId }
+    metadata: { connectionId: connection._id, requesterId: req.user.userId, action: 'open_network' }
   });
 
   res.status(201).json({ success: true, message: 'Connection request sent', data: connection });
@@ -54,7 +77,7 @@ export const respondToConnectionRequest = asyncHandler(async (req, res) => {
     type: 'connection',
     title: 'Connection request update',
     body: `Your connection request was ${status}.`,
-    metadata: { connectionId: connection._id, status }
+    metadata: { connectionId: connection._id, status, action: 'open_network' }
   });
 
   res.json({ success: true, message: `Connection request ${status}`, data: connection });

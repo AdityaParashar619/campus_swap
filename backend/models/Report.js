@@ -3,7 +3,7 @@ import mongoose from 'mongoose';
 const reportSchema = new mongoose.Schema(
   {
     reporter: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
-    targetType: { type: String, enum: ['listing', 'user', 'chat', 'note', 'request'], required: true },
+    targetType: { type: String, enum: ['listing', 'user', 'chat', 'note', 'request', 'feedback'], required: true },
     targetId: { type: String, required: true },
     targetUser: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     reason: {
