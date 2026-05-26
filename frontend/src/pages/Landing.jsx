@@ -25,20 +25,20 @@ export default function Landing() {
     <PageTransition>
       <div className="relative min-h-screen overflow-hidden">
         <motion.nav initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} className="sticky top-0 z-50 border-b border-white/10 bg-slate-950 text-white shadow-[0_12px_30px_rgba(2,6,23,0.28)]">
-          <div className="section-container flex items-center justify-between py-3">
+          <div className="section-container flex items-center justify-between gap-3 py-3">
             <Link to="/" className="flex items-center gap-2">
               <span className="grid h-9 w-9 place-items-center rounded-lg bg-gradient-to-br from-teal-400 via-blue-500 to-amber-400 text-sm font-black text-slate-950">CS</span>
               <span className="text-xl font-black tracking-tight">CampusSwap</span>
             </Link>
-            <div className="flex gap-3">
-              <Link to="/login" className="rounded-lg border border-white/15 px-4 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/10">Login</Link>
-              <Link to="/signup" className="rounded-lg bg-amber-400 px-5 py-2 text-sm font-black text-slate-950 shadow-lg shadow-amber-500/20 hover:bg-amber-300">Get Started</Link>
+            <div className="flex shrink-0 gap-2 sm:gap-3">
+              <Link to="/login" className="rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-slate-100 transition hover:bg-white/10 sm:px-4">Login</Link>
+              <Link to="/signup" className="rounded-lg bg-amber-400 px-3 py-2 text-sm font-black text-slate-950 shadow-lg shadow-amber-500/20 hover:bg-amber-300 sm:px-5">Get Started</Link>
             </div>
           </div>
         </motion.nav>
 
         <section className="border-b border-slate-200/70 bg-[linear-gradient(135deg,rgba(15,118,110,0.10),rgba(255,255,255,0)_32%),linear-gradient(315deg,rgba(245,158,11,0.10),rgba(255,255,255,0)_36%)] pb-24 pt-16 md:pb-28 md:pt-24">
-          <div className="section-container grid lg:grid-cols-2 gap-12 items-center">
+          <div className="section-container grid items-center gap-10 lg:grid-cols-2 lg:gap-12">
             <Stagger className="space-y-6">
               <StaggerItem><span className="chip">Trusted campus-only ecosystem</span></StaggerItem>
               <StaggerItem>
@@ -56,7 +56,7 @@ export default function Landing() {
                 </div>
               </StaggerItem>
               <StaggerItem>
-                <div className="grid grid-cols-3 gap-3 max-w-md">
+                <div className="grid max-w-md grid-cols-1 gap-3 min-[420px]:grid-cols-3">
                   <div className="premium-card p-3 text-center"><p className="text-xl font-extrabold"><CountUp to={10} suffix="K+" /></p><p className="text-[11px] text-slate-500">Campus users</p></div>
                   <div className="premium-card p-3 text-center"><p className="text-xl font-extrabold"><CountUp to={50} suffix="K+" /></p><p className="text-[11px] text-slate-500">Listings posted</p></div>
                   <div className="premium-card p-3 text-center"><p className="text-xl font-extrabold"><CountUp to={99} suffix="%" /></p><p className="text-[11px] text-slate-500">Safe exchanges</p></div>

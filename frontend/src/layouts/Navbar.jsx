@@ -78,7 +78,7 @@ export default function Navbar() {
           <span className="text-xl font-black tracking-tight text-white">CampusSwap</span>
         </Link>
 
-        <div className="hidden items-center gap-1 rounded-lg border border-white/10 bg-white/[0.06] p-1 md:flex">
+        <div className="hidden items-center gap-1 rounded-lg border border-white/10 bg-white/[0.06] p-1 xl:flex">
           {links.map((link) => (
             <NavLink
               key={link.href}
@@ -90,7 +90,7 @@ export default function Navbar() {
           ))}
         </div>
 
-        <div className="hidden md:flex items-center gap-3">
+        <div className="hidden items-center gap-3 xl:flex">
           <Link to="/feedback" className="rounded-lg border border-teal-300/30 px-3 py-2 text-sm font-semibold text-teal-100 hover:bg-teal-400/10">Feedback</Link>
           <Link to="/notifications" className="relative rounded-lg border border-white/15 px-3 py-2 text-sm font-semibold text-slate-100 hover:bg-white/10">
             Notifications
@@ -105,7 +105,7 @@ export default function Navbar() {
           <button onClick={handleLogout} className="rounded-lg bg-amber-400 px-4 py-2 text-sm font-black text-slate-950 shadow-lg shadow-amber-500/20 hover:bg-amber-300">Logout</button>
         </div>
 
-        <button className="rounded-lg border border-white/15 px-3 py-2 font-semibold md:hidden" onClick={() => setIsOpen((v) => !v)}>
+        <button className="rounded-lg border border-white/15 px-3 py-2 font-semibold xl:hidden" onClick={() => setIsOpen((v) => !v)}>
           Menu
         </button>
       </div>
@@ -117,7 +117,7 @@ export default function Navbar() {
             animate={{ opacity: 1, y: 0, height: 'auto' }}
             exit={{ opacity: 0, y: -8, height: 0 }}
             transition={{ duration: 0.24 }}
-            className="md:hidden overflow-hidden"
+            className="overflow-hidden xl:hidden"
           >
             <div className="section-container flex flex-col gap-2 pb-4">
               <Link to="/feedback" className="rounded-lg bg-white/10 px-3 py-2" onClick={() => setIsOpen(false)}>

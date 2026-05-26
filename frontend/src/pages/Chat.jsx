@@ -24,6 +24,7 @@ export default function Chat() {
   const [newMessage, setNewMessage] = useState('');
   const [reportOpen, setReportOpen] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [showMobileList, setShowMobileList] = useState(true);
   const { user } = useAuth();
   const location = useLocation();
   const preselectedUserId = location.state?.selectedUserId;
@@ -91,7 +92,10 @@ export default function Chat() {
   useEffect(() => {
     if (preselectedUserId && users.length > 0 && !selectedUser) {
       const preselectedUser = users.find((u) => u._id === preselectedUserId);
-      if (preselectedUser) setSelectedUser(preselectedUser);
+      if (preselectedUser) {
+        setSelectedUser(preselectedUser);
+        setShowMobileList(false);
+      }
     }
   }, [preselectedUserId, users, selectedUser]);
 
@@ -149,17 +153,29 @@ export default function Chat() {
   return (
     <PageTransition>
       <Layout>
-        <div className="min-h-screen py-10">
-          <div className="section-container space-y-6">
-            <div>
-              <p className="chip mb-3">Realtime messaging</p>
-              <h1 className="text-section-title">Campus Chat</h1>
+        <div className="min-h-screen py-4 sm:py-8 lg:py-10">
+          <div className="section-container space-y-4 sm:space-y-6">
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="chip mb-3">Realtime messaging</p>
+                <h1 className="text-2xl font-black tracking-tight text-slate-950 dark:text-white sm:text-4xl">Campus Chat</h1>
+              </div>
+              <p className="max-w-xl text-sm leading-relaxed text-slate-500 dark:text-slate-300">
+                Clear, direct conversations for campus exchanges, borrowing, notes, and connection follow-ups.
+              </p>
             </div>
 
-            <div className="grid h-[72vh] gap-6 lg:grid-cols-[320px_1fr]">
-              <PremiumCard className="flex flex-col overflow-hidden border-slate-200/70 bg-white/90 p-4 dark:border-slate-800 dark:bg-slate-950/80" hover={false}>
+            <div className="grid min-h-[calc(100vh-170px)] gap-4 lg:grid-cols-[340px_minmax(0,1fr)] lg:gap-6">
+              <PremiumCard className={`${showMobileList ? 'flex' : 'hidden'} min-h-[calc(100vh-190px)] flex-col overflow-hidden border-slate-200/70 bg-white/95 p-3 dark:border-slate-800 dark:bg-slate-950/85 sm:p-4 lg:flex lg:min-h-[72vh]`} hover={false}>
+                <div className="mb-3 flex items-center justify-between gap-3">
+                  <div>
+                    <p className="text-sm font-black text-slate-950 dark:text-white">Conversations</p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400">{users.length} students available</p>
+                  </div>
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">Live</span>
+                </div>
                 <div className="mb-3">
-                  <input className="premium-surface w-full px-3 py-2.5 text-sm text-slate-900 placeholder:text-slate-400 dark:text-white" placeholder="Search chats" />
+                  <input className="premium-surface w-full px-3 py-3 text-sm text-slate-900 placeholder:text-slate-400 dark:text-white" placeholder="Search chats" />
                 </div>
                 <div className="flex-1 overflow-y-auto space-y-2 pr-1">
                   {loading ? (
@@ -168,20 +184,23 @@ export default function Chat() {
                     users.map((u) => (
                       <button
                         key={u._id}
-                        onClick={() => setSelectedUser(u)}
-                        className={`w-full rounded-lg border p-3 text-left transition ${selectedUser?._id === u._id ? 'border-cyan-300/60 bg-cyan-50 text-slate-950 dark:border-cyan-400/30 dark:bg-cyan-400/10 dark:text-white' : 'border-slate-200/60 bg-white/70 hover:bg-white dark:border-slate-800 dark:bg-slate-900/60 dark:hover:bg-slate-900'}`}
+                        onClick={() => {
+                          setSelectedUser(u);
+                          setShowMobileList(false);
+                        }}
+                        className={`w-full rounded-lg border p-3 text-left transition ${selectedUser?._id === u._id ? 'border-teal-300 bg-teal-50 text-slate-950 shadow-sm dark:border-teal-400/40 dark:bg-teal-400/10 dark:text-white' : 'border-slate-200/70 bg-white hover:border-slate-300 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900/70 dark:hover:bg-slate-900'}`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-r from-blue-600 via-cyan-600 to-emerald-500 font-semibold text-white">
+                          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500 via-blue-600 to-slate-900 font-black text-white">
                             {getInitials(u.name)}
                             {onlineMap[u._id] && <span className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" />}
                           </div>
                           <div className="flex-1 min-w-0">
                             <div className="flex justify-between gap-2">
-                              <p className="font-semibold truncate">{u.name}</p>
+                              <p className="truncate font-bold">{u.name}</p>
                               {(unreadByUser[u._id] || 0) > 0 && <span className="text-[10px] font-bold bg-rose-500 text-white px-1.5 py-0.5 rounded-full">{unreadByUser[u._id]}</span>}
                             </div>
-                            <p className="text-xs text-slate-500 truncate">{chatPreview[u._id] || 'Start a conversation'}</p>
+                            <p className="truncate text-xs text-slate-500 dark:text-slate-400">{chatPreview[u._id] || 'Start a conversation'}</p>
                           </div>
                         </div>
                       </button>
@@ -190,32 +209,37 @@ export default function Chat() {
                 </div>
               </PremiumCard>
 
-              <PremiumCard className="flex flex-col overflow-hidden border-slate-200/70 bg-white/95 p-0 dark:border-slate-800 dark:bg-slate-950/85" hover={false}>
+              <PremiumCard className={`${selectedUser || !showMobileList ? 'flex' : 'hidden'} min-h-[calc(100vh-190px)] flex-col overflow-hidden border-slate-200/70 bg-white p-0 dark:border-slate-800 dark:bg-slate-950 lg:flex lg:min-h-[72vh]`} hover={false}>
                 {!selectedUser ? (
-                  <div className="flex-1 grid place-items-center text-slate-500">
-                    Select a conversation to start chatting.
+                  <div className="grid flex-1 place-items-center p-8 text-center text-slate-500">
+                    <div>
+                      <p className="text-lg font-bold text-slate-800 dark:text-slate-100">Select a conversation</p>
+                      <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Choose a student from the list to start chatting.</p>
+                      <button className="mt-5 rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white lg:hidden" onClick={() => setShowMobileList(true)}>Open conversations</button>
+                    </div>
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-3 border-b border-slate-200/70 bg-slate-950 px-5 py-4 text-white dark:border-slate-800">
-                      <div className="relative flex h-10 w-10 items-center justify-center rounded-lg bg-gradient-to-r from-blue-500 via-cyan-500 to-emerald-400 font-semibold text-white">
+                    <div className="flex items-center gap-3 border-b border-slate-200/70 bg-slate-950 px-3 py-3 text-white dark:border-slate-800 sm:px-5 sm:py-4">
+                      <button className="rounded-lg border border-white/15 px-3 py-2 text-sm font-bold lg:hidden" onClick={() => setShowMobileList(true)}>Back</button>
+                      <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-400 via-blue-500 to-amber-400 font-black text-slate-950">
                         {getInitials(selectedUser.name)}
                         {onlineMap[selectedUser._id] && <span className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" />}
                       </div>
-                      <div className="flex-1">
-                        <p className="font-bold">{selectedUser.name}</p>
+                      <div className="min-w-0 flex-1">
+                        <p className="truncate font-bold">{selectedUser.name}</p>
                         <p className="text-xs text-slate-300">{onlineMap[selectedUser._id] ? 'Online now' : 'Offline'}</p>
                       </div>
-                      <Button size="sm" variant="danger" onClick={() => setReportOpen(true)}>Report</Button>
+                      <Button size="sm" variant="danger" className="shrink-0" onClick={() => setReportOpen(true)}>Report</Button>
                     </div>
 
-                    <div className="flex-1 space-y-3 overflow-y-auto bg-slate-100/80 px-5 py-4 dark:bg-slate-900/70">
+                    <div className="flex-1 space-y-3 overflow-y-auto bg-slate-100/80 px-3 py-4 dark:bg-slate-900/70 sm:px-5">
                       {messages.map((msg, i) => {
                         const own = (msg.sender?._id || msg.sender?.id) === user?.id;
                         return (
                           <motion.div key={`${msg.createdAt || i}-${i}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={`flex ${own ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[78%] rounded-2xl px-4 py-2.5 shadow-sm ${own ? 'rounded-br-md bg-gradient-to-r from-blue-700 via-cyan-700 to-emerald-600 text-white' : 'rounded-bl-md border border-slate-200 bg-white text-slate-950 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-50'}`}>
-                              <p className="text-sm leading-relaxed">{msg.text}</p>
+                            <div className={`max-w-[88%] break-words rounded-2xl px-4 py-2.5 shadow-sm sm:max-w-[76%] ${own ? 'rounded-br-md bg-slate-950 text-white dark:bg-teal-700' : 'rounded-bl-md border border-slate-200 bg-white text-slate-950 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-50'}`}>
+                              <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.text}</p>
                               <p className={`mt-1 text-[10px] ${own ? 'text-white/80' : 'text-slate-500 dark:text-slate-300'}`}>
                                 {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
                               </p>
@@ -227,15 +251,15 @@ export default function Chat() {
                       <div ref={messagesEndRef} />
                     </div>
 
-                    <form onSubmit={handleSendMessage} className="flex gap-3 border-t border-slate-200/70 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
+                    <form onSubmit={handleSendMessage} className="flex gap-2 border-t border-slate-200/70 bg-white p-3 dark:border-slate-800 dark:bg-slate-950 sm:gap-3 sm:p-4">
                       <input
                         type="text"
                         value={newMessage}
                         onChange={(e) => onMessageChange(e.target.value)}
                         placeholder="Write a message"
-                        className="premium-surface flex-1 px-4 py-3 text-slate-950 placeholder:text-slate-400 dark:text-white"
+                        className="premium-surface min-w-0 flex-1 px-4 py-3 text-slate-950 placeholder:text-slate-400 dark:text-white"
                       />
-                      <Button variant="gradient" type="submit">Send</Button>
+                      <Button variant="gradient" type="submit" className="shrink-0">Send</Button>
                     </form>
 
                     <ReportDialog
