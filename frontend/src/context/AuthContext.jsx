@@ -1,4 +1,5 @@
 import { createContext, useEffect, useState } from 'react';
+import { authAPI } from '../services/api';
 
 export const AuthContext = createContext();
 
@@ -7,13 +8,32 @@ export const AuthProvider = ({ children }) => {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    // Check if token exists on mount
-    const token = localStorage.getItem('token');
-    const userData = localStorage.getItem('user');
-    if (token && userData) {
-      setUser(JSON.parse(userData));
-    }
-    setLoading(false);
+    let mounted = true;
+    const hydrateAuth = async () => {
+      const token = localStorage.getItem('token');
+      const userData = localStorage.getItem('user');
+
+      if (token && userData) {
+        try {
+          setUser(JSON.parse(userData));
+          const response = await authAPI.getMe();
+          if (mounted && response?.data?.data) {
+            setUser((prev) => ({ ...prev, ...response.data.data }));
+          }
+        } catch {
+          localStorage.removeItem('token');
+          localStorage.removeItem('user');
+          if (mounted) setUser(null);
+        }
+      }
+
+      if (mounted) setLoading(false);
+    };
+
+    hydrateAuth();
+    return () => {
+      mounted = false;
+    };
   }, []);
 
   const login = (userData, token) => {
@@ -28,9 +48,5 @@ export const AuthProvider = ({ children }) => {
     setUser(null);
   };
 
-  return (
-    <AuthContext.Provider value={{ user, login, logout, loading }}>
-      {children}
-    </AuthContext.Provider>
-  );
+  return <AuthContext.Provider value={{ user, login, logout, loading }}>{children}</AuthContext.Provider>;
 };

@@ -1,183 +1,235 @@
 import { motion } from 'framer-motion';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Button, PageTransition, PremiumCard } from '../components/ui';
+import { useAuth } from '../hooks/useAuth';
 import Layout from '../layouts/Layout';
-import { bountyAPI } from '../services/api';
+import { requestAPI } from '../services/api';
 
 export default function Bounties() {
-  const [bounties, setBounties] = useState([]);
+  const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [formData, setFormData] = useState({ title: '', description: '' });
+  const [activeResponseId, setActiveResponseId] = useState(null);
+  const [responseMessage, setResponseMessage] = useState('');
+  const [notice, setNotice] = useState('');
+  const [formData, setFormData] = useState({ title: '', description: '', category: 'Borrow', location: '' });
+  const { user } = useAuth();
+  const currentUserId = user?.id || user?._id;
 
-  useEffect(() => {
-    fetchBounties();
-  }, []);
-
-  const fetchBounties = async () => {
+  const fetchRequests = async () => {
+    setLoading(true);
     try {
-      const response = await bountyAPI.getAll();
-      setBounties(response.data);
+      const response = await requestAPI.getAll();
+      setRequests(response.data.data || []);
     } catch (error) {
-      console.error('Failed to fetch bounties:', error);
+      setNotice(error.userMessage || 'Failed to fetch requests');
     } finally {
       setLoading(false);
     }
   };
 
-  const handleCreateBounty = async (e) => {
+  useEffect(() => {
+    fetchRequests();
+  }, []);
+
+  const openRequests = useMemo(() => requests.filter((request) => request.status === 'open'), [requests]);
+  const completedRequests = useMemo(() => requests.filter((request) => request.status !== 'open'), [requests]);
+
+  const handleCreateRequest = async (e) => {
     e.preventDefault();
+    setNotice('');
     try {
-      await bountyAPI.create(formData);
-      setFormData({ title: '', description: '' });
+      await requestAPI.create(formData);
+      setFormData({ title: '', description: '', category: 'Borrow', location: '' });
       setShowForm(false);
-      fetchBounties();
+      setNotice('Request published');
+      fetchRequests();
     } catch (error) {
-      console.error('Failed to create bounty:', error);
+      setNotice(error.userMessage || 'Failed to create request');
     }
+  };
+
+  const submitResponse = async (requestId) => {
+    if (!responseMessage.trim()) {
+      setNotice('Write a response before sending');
+      return;
+    }
+
+    setNotice('');
+    try {
+      await requestAPI.respond(requestId, responseMessage);
+      setResponseMessage('');
+      setActiveResponseId(null);
+      setNotice('Response sent');
+      fetchRequests();
+    } catch (error) {
+      setNotice(error.userMessage || 'Failed to respond');
+    }
+  };
+
+  const markFulfilled = async (id, fulfilledBy) => {
+    setNotice('');
+    try {
+      await requestAPI.updateStatus(id, 'fulfilled', fulfilledBy);
+      setNotice('Request marked fulfilled');
+      fetchRequests();
+    } catch (error) {
+      setNotice(error.userMessage || 'Failed to update request');
+    }
+  };
+
+  const closeRequest = async (id) => {
+    setNotice('');
+    try {
+      await requestAPI.updateStatus(id, 'closed');
+      setNotice('Request closed');
+      fetchRequests();
+    } catch (error) {
+      setNotice(error.userMessage || 'Failed to close request');
+    }
+  };
+
+  const renderRequest = (request) => {
+    const isOwner = request.user?._id === currentUserId;
+    const hasResponded = request.responses?.some((response) => response.user?._id === currentUserId);
+
+    return (
+      <PremiumCard key={request._id}>
+        <div className="flex flex-col gap-5">
+          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
+            <div>
+              <h3 className="text-feature-title mb-2">{request.title}</h3>
+              <p className="text-body-sm mb-2">{request.description || 'No extra details provided.'}</p>
+              <p className="text-body-sm">{request.category} | {request.location || 'Campus'} | Requested by {request.user?.name}</p>
+              <p className="text-xs mt-2 text-slate-500">Status: {request.status}{request.fulfilledBy?.name ? ` by ${request.fulfilledBy.name}` : ''}</p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {!isOwner && request.status === 'open' && (
+                <Button variant="secondary" onClick={() => setActiveResponseId(activeResponseId === request._id ? null : request._id)}>
+                  {hasResponded ? 'Update Response' : 'Respond'}
+                </Button>
+              )}
+              {isOwner && request.status === 'open' && request.responses?.length === 0 && (
+                <Button variant="secondary" onClick={() => closeRequest(request._id)}>Close</Button>
+              )}
+            </div>
+          </div>
+
+          {activeResponseId === request._id && (
+            <div className="rounded-xl border border-slate-200/60 bg-white/60 p-4">
+              <textarea
+                className="premium-surface w-full px-4 py-3"
+                rows="3"
+                placeholder="Tell them how you can help and when you are available."
+                value={responseMessage}
+                onChange={(e) => setResponseMessage(e.target.value)}
+              />
+              <div className="mt-3 flex gap-2">
+                <Button variant="gradient" onClick={() => submitResponse(request._id)}>Send Response</Button>
+                <Button variant="secondary" onClick={() => setActiveResponseId(null)}>Cancel</Button>
+              </div>
+            </div>
+          )}
+
+          {request.responses?.length > 0 && (
+            <div className="space-y-3 border-t border-slate-200/40 pt-4">
+              <p className="text-sm font-semibold text-slate-700">Responses</p>
+              {request.responses.map((response) => (
+                <div key={`${request._id}-${response.user?._id}`} className="flex flex-col gap-3 rounded-xl bg-slate-50/80 p-4 md:flex-row md:items-center md:justify-between">
+                  <div>
+                    <p className="font-semibold">{response.user?.name || 'Student'} <span className="text-xs font-normal text-slate-500">{response.status}</span></p>
+                    <p className="text-body-sm">{response.message}</p>
+                  </div>
+                  {isOwner && request.status === 'open' && (
+                    <Button variant="gradient" size="sm" onClick={() => markFulfilled(request._id, response.user?._id)}>
+                      Accept and Fulfill
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </PremiumCard>
+    );
   };
 
   return (
     <PageTransition>
       <Layout>
-        <div className="min-h-screen bg-gradient-to-b from-white via-indigo-50/20 to-white py-12">
-          <div className="section-container">
-            {/* Header */}
-            <motion.div
-              initial={{ opacity: 0, y: -30 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              className="mb-12"
-            >
+        <div className="min-h-screen py-12">
+          <div className="section-container space-y-8">
+            <motion.div initial={{ opacity: 0, y: -30 }} animate={{ opacity: 1, y: 0 }}>
               <div className="flex justify-between items-start md:items-center gap-6">
-                <motion.div
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.1 }}
-                >
-                  <h1 className="text-section-title mb-2 text-gray-900">🎯 Bounties</h1>
-                  <p className="text-lg text-gray-600">Post requests and earn rewards from peers</p>
-                </motion.div>
-                <motion.div
-                  initial={{ opacity: 0, x: 20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.1 }}
-                >
-                  <Button variant="gradient" onClick={() => setShowForm(!showForm)} size="lg">
-                    {showForm ? '✕ Cancel' : '💰 New Bounty'}
-                  </Button>
-                </motion.div>
+                <div>
+                  <h1 className="text-section-title mb-2">Community Requests</h1>
+                  <p className="text-body-sm">Ask for urgent help and let other students offer support dynamically.</p>
+                </div>
+                <Button variant="gradient" onClick={() => setShowForm(!showForm)} size="lg">
+                  {showForm ? 'Cancel' : 'New Request'}
+                </Button>
               </div>
             </motion.div>
 
-            {/* Create Form */}
+            {notice && <p className="rounded-lg bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">{notice}</p>}
+
             {showForm && (
-              <motion.div
-                initial={{ opacity: 0, y: -20, scale: 0.95 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                className="mb-12 p-8 bg-white rounded-2xl shadow-lg border border-gray-100"
-              >
-                <motion.h3
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.1 }}
-                  className="text-feature-title mb-6 text-gray-900"
-                >
-                  📌 Post a Bounty
-                </motion.h3>
-                <form onSubmit={handleCreateBounty} className="space-y-6">
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.1 }}
-                  >
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Bounty Title</label>
+              <PremiumCard>
+                <form onSubmit={handleCreateRequest} className="space-y-4">
+                  <input
+                    type="text"
+                    placeholder="Need calculator for tomorrow exam"
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    required
+                    className="w-full px-4 py-3 border border-slate-300/30 rounded-xl bg-white/60"
+                  />
+                  <textarea
+                    placeholder="Add details, urgency, and preferred response method..."
+                    value={formData.description}
+                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                    rows="3"
+                    className="w-full px-4 py-3 border border-slate-300/30 rounded-xl bg-white/60"
+                  />
+                  <div className="grid md:grid-cols-2 gap-4">
                     <input
                       type="text"
-                      placeholder="e.g., Need help with Calculus homework"
-                      value={formData.title}
-                      onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                      required
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent font-medium transition-all"
+                      placeholder="Category (Borrow, Notes, Help, Other)"
+                      value={formData.category}
+                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                      className="w-full px-4 py-3 border border-slate-300/30 rounded-xl bg-white/60"
                     />
-                  </motion.div>
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.15 }}
-                  >
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Description</label>
-                    <textarea
-                      placeholder="Describe what you need help with and the reward you're offering..."
-                      value={formData.description}
-                      onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                      className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent font-medium transition-all"
-                      rows="4"
+                    <input
+                      type="text"
+                      placeholder="Location / Hostel"
+                      value={formData.location}
+                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                      className="w-full px-4 py-3 border border-slate-300/30 rounded-xl bg-white/60"
                     />
-                  </motion.div>
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.2 }}
-                    className="flex gap-4 pt-4"
-                  >
-                    <Button variant="gradient" type="submit" size="md">✓ Post Bounty</Button>
-                    <Button variant="secondary" onClick={() => setShowForm(false)} size="md">✕ Cancel</Button>
-                  </motion.div>
+                  </div>
+                  <Button variant="gradient" type="submit">Publish Request</Button>
                 </form>
-              </motion.div>
+              </PremiumCard>
             )}
 
-            {/* Bounties List */}
             {loading ? (
-              <div className="text-center py-20">
-                <motion.div animate={{ y: [0, 10, 0] }} transition={{ duration: 2, repeat: Infinity }}>
-                  <p className="text-lg font-semibold text-gray-600">Loading bounties...</p>
-                </motion.div>
-              </div>
-            ) : bounties.length === 0 ? (
-              <div className="text-center py-20">
-                <p className="text-lg font-semibold text-gray-600">No bounties yet. Be the first to post!</p>
-              </div>
+              <div className="grid md:grid-cols-2 gap-6">{[1, 2, 3].map((item) => <div key={item} className="skeleton h-44" />)}</div>
+            ) : requests.length === 0 ? (
+              <PremiumCard><p className="text-body-sm">No requests yet. Start the community help thread.</p></PremiumCard>
             ) : (
-              <motion.div
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ staggerChildren: 0.1, delayChildren: 0.2 }}
-                className="space-y-6"
-              >
-                {bounties.map((bounty, i) => (
-                  <motion.div
-                    key={bounty._id}
-                    initial={{ opacity: 0, x: -30 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: i * 0.08 }}
-                    whileHover={{ x: 5 }}
-                  >
-                    <PremiumCard>
-                      <motion.div
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        transition={{ delay: 0.1 }}
-                        className="flex justify-between items-start gap-6"
-                      >
-                        <div className="flex-1">
-                          <h3 className="text-feature-title mb-3 text-gray-900">{bounty.title}</h3>
-                          <p className="text-body-sm mb-4">{bounty.description}</p>
-                          <p className="text-sm font-medium text-indigo-600">Posted by {bounty.user?.name}</p>
-                        </div>
-                        <motion.div
-                          whileHover={{ scale: 1.05 }}
-                          whileTap={{ scale: 0.95 }}
-                          className="flex-shrink-0"
-                        >
-                          <Button variant="gradient" size="md">💬 Respond</Button>
-                        </motion.div>
-                      </motion.div>
-                    </PremiumCard>
-                  </motion.div>
-                ))}
-              </motion.div>
+              <div className="space-y-8">
+                <div className="space-y-5">
+                  <h2 className="text-feature-title">Open Requests</h2>
+                  {openRequests.length > 0 ? openRequests.map(renderRequest) : <PremiumCard><p className="text-body-sm">No open requests right now.</p></PremiumCard>}
+                </div>
+
+                {completedRequests.length > 0 && (
+                  <div className="space-y-5">
+                    <h2 className="text-feature-title">Completed Requests</h2>
+                    {completedRequests.map(renderRequest)}
+                  </div>
+                )}
+              </div>
             )}
           </div>
         </div>

@@ -1,51 +1,44 @@
+import { asyncHandler } from '../middleware/errorMiddleware.js';
+import { BadRequest } from '../utils/AppError.js';
 import Message from '../models/Message.js';
+import Notification from '../models/Notification.js';
 
-export const sendMessage = async (req, res) => {
-  try {
-    const { receiverId, text } = req.body;
-    const senderId = req.user.userId;
+export const sendMessage = asyncHandler(async (req, res) => {
+  const { receiverId, text } = req.body;
 
-    if (!receiverId || !text) {
-      return res.status(400).json({ error: 'Receiver and text required' });
-    }
-
-    const message = new Message({
-      sender: senderId,
-      receiver: receiverId,
-      text
-    });
-
-    await message.save();
-    await message.populate('sender receiver', 'name email');
-
-    // Emit via Socket.io if available
-    const io = req.app.locals.io;
-    if (io) {
-      io.to(receiverId).emit('receiveMessage', message);
-    }
-
-    res.status(201).json({ message: 'Message sent', data: message });
-  } catch (error) {
-    res.status(500).json({ error: error.message });
+  if (!receiverId || !text) {
+    throw new BadRequest('Receiver and text required');
   }
-};
 
-export const getMessages = async (req, res) => {
-  try {
-    const { userId } = req.params;
-    const currentUserId = req.user.userId;
+  const message = await Message.create({ sender: req.user.userId, receiver: receiverId, text });
+  await message.populate('sender receiver', 'name email');
 
-    const messages = await Message.find({
-      $or: [
-        { sender: currentUserId, receiver: userId },
-        { sender: userId, receiver: currentUserId }
-      ]
-    })
-      .populate('sender receiver', 'name email')
-      .sort({ createdAt: 1 });
+  const io = req.app.locals.io;
+  if (io) io.to(`user:${receiverId}`).emit('receiveMessage', message);
 
-    res.json(messages);
-  } catch (error) {
-    res.status(500).json({ error: error.message });
-  }
-};
+  await Notification.create({
+    user: receiverId,
+    type: 'message',
+    title: 'New message',
+    body: `${message.sender?.name || 'A student'} sent you a message.`,
+    metadata: { senderId: req.user.userId }
+  });
+
+  res.status(201).json({ success: true, message: 'Message sent', data: message });
+});
+
+export const getMessages = asyncHandler(async (req, res) => {
+  const { userId } = req.params;
+  const currentUserId = req.user.userId;
+
+  const messages = await Message.find({
+    $or: [
+      { sender: currentUserId, receiver: userId },
+      { sender: userId, receiver: currentUserId }
+    ]
+  })
+    .populate('sender receiver', 'name email')
+    .sort({ createdAt: 1 });
+
+  res.json({ success: true, data: messages });
+});

@@ -1,337 +1,192 @@
-import { motion } from 'framer-motion';
+﻿import { motion } from 'framer-motion';
+import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { PageTransition } from '../components/ui';
+import { CountUp, PageTransition, Reveal, Stagger, StaggerItem } from '../components/ui';
+
+const faqs = [
+  {
+    q: 'Is CampusSwap only for my college?',
+    a: 'Yes. The platform is designed for campus-first trust, with verified student access and local interactions.'
+  },
+  {
+    q: 'Can students use it for both items and notes?',
+    a: 'Absolutely. CampusSwap supports listings, notes exchange, requests, networking, and real-time chat in one app.'
+  },
+  {
+    q: 'How is safety handled?',
+    a: 'Moderation tools include reports queue, listing visibility controls, user actions, and admin review workflows.'
+  }
+];
 
 export default function Landing() {
-  console.log('🏠 Landing page rendered');
+  const [openFaq, setOpenFaq] = useState(0);
 
   return (
     <PageTransition>
-      <div className="min-h-screen bg-white">
-        {/* Navigation */}
-        <motion.nav
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.6 }}
-          className="sticky top-0 z-50 backdrop-blur-md bg-white/70 shadow-sm"
-        >
-          <div className="section-container py-6 flex justify-between items-center">
-            <motion.div whileHover={{ scale: 1.08 }} className="text-2xl font-display font-black text-indigo-600">
-              CampusSwap
-            </motion.div>
-            <div className="flex gap-4">
-              <Link to="/login">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className="text-gray-700 font-medium hover:text-indigo-600 transition-colors px-4 py-2"
-                >
-                  Login
-                </motion.button>
-              </Link>
-              <Link to="/signup">
-                <motion.button
-                  whileHover={{ scale: 1.05 }}
-                  whileTap={{ scale: 0.95 }}
-                  className="px-6 py-2 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-indigo-500/40 transition-all"
-                >
-                  Sign up
-                </motion.button>
-              </Link>
+      <div className="min-h-screen relative overflow-hidden">
+        <div className="pointer-events-none absolute inset-0 opacity-80">
+          <motion.div className="absolute -top-28 -left-24 h-96 w-96 rounded-full bg-blue-400/20 blur-3xl" animate={{ x: [0, 18, 0], y: [0, 10, 0] }} transition={{ duration: 10, repeat: Infinity }} />
+          <motion.div className="absolute top-24 -right-20 h-[28rem] w-[28rem] rounded-full bg-violet-500/20 blur-3xl" animate={{ x: [0, -18, 0], y: [0, -10, 0] }} transition={{ duration: 12, repeat: Infinity }} />
+          <motion.div className="absolute bottom-0 left-1/3 h-72 w-72 rounded-full bg-cyan-400/20 blur-3xl" animate={{ y: [0, -10, 0] }} transition={{ duration: 9, repeat: Infinity }} />
+        </div>
+
+        <motion.nav initial={{ opacity: 0, y: -16 }} animate={{ opacity: 1, y: 0 }} className="sticky top-0 z-50 border-b border-slate-200/20 bg-white/60 backdrop-blur-2xl">
+          <div className="section-container py-4 flex justify-between items-center">
+            <div className="text-2xl font-black tracking-tight bg-gradient-to-r from-blue-600 to-violet-500 bg-clip-text text-transparent">CampusSwap</div>
+            <div className="flex gap-3">
+              <Link to="/login" className="px-4 py-2 rounded-xl text-sm font-semibold text-slate-700 hover:text-blue-600 transition">Login</Link>
+              <Link to="/signup" className="px-5 py-2 rounded-xl text-sm font-semibold text-white bg-gradient-to-r from-blue-600 to-violet-600 shadow-lg shadow-blue-500/30">Get Started</Link>
             </div>
           </div>
         </motion.nav>
 
-        {/* =============== HERO SECTION =============== */}
-        <section className="py-20 md:py-32 bg-gradient-to-b from-white via-indigo-50/30 to-white">
-          <div className="section-container">
-            <div className="grid md:grid-cols-2 gap-12 items-center">
-              {/* Left: Text Content */}
-              <motion.div
-                initial={{ opacity: 0, x: -50 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ duration: 0.8, ease: 'easeOut' }}
-              >
-                {/* Badge/Tag */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.1 }}
-                  className="mb-6 inline-block"
-                >
-                  <span className="text-badge bg-indigo-100 px-4 py-2 rounded-full">
-                    🎓 Built for College Students
-                  </span>
-                </motion.div>
-
-                {/* Main Heading */}
-                <motion.h1
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.2, duration: 0.8 }}
-                  className="text-hero-lg bg-gradient-to-r from-gray-900 via-indigo-600 to-purple-600 bg-clip-text text-transparent mb-6"
-                >
-                  Buy, Sell & Trade with Your Campus
-                </motion.h1>
-
-                {/* Subheading */}
-                <motion.p
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.3, duration: 0.8 }}
-                  className="text-xl text-gray-600 mb-2 max-w-md leading-relaxed"
-                >
-                  Connect instantly with students. Buy textbooks, find roommates, post bounties, and trade items—safely in one trusted place.
-                </motion.p>
-
-                {/* Trust Signal */}
-                <motion.p
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ delay: 0.4 }}
-                  className="text-sm text-gray-500 mb-8 flex items-center gap-2"
-                >
-                  ✓ Trusted by 5,000+ students on campus
-                </motion.p>
-
-                {/* Button Group */}
-                <motion.div
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5 }}
-                  className="flex flex-col sm:flex-row gap-4"
-                >
-                  <Link to="/signup" className="w-fit">
-                    <motion.button
-                      whileHover={{ scale: 1.07 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl shadow-lg shadow-indigo-500/30 hover:shadow-indigo-500/50 transition-all"
-                    >
-                      Get Started Free
-                    </motion.button>
-                  </Link>
-                  <Link to="/login" className="w-fit">
-                    <motion.button
-                      whileHover={{ scale: 1.07 }}
-                      whileTap={{ scale: 0.95 }}
-                      className="px-8 py-4 bg-white/50 backdrop-blur-md border border-gray-200/50 text-gray-900 font-semibold rounded-xl hover:bg-white/80 transition-all"
-                    >
-                      Learn More →
-                    </motion.button>
-                  </Link>
-                </motion.div>
-              </motion.div>
-
-              {/* Right: Visual Element (Illustration/Placeholder) */}
-              <motion.div
-                initial={{ opacity: 0, x: 50, scale: 0.9 }}
-                animate={{ opacity: 1, x: 0, scale: 1 }}
-                transition={{ duration: 0.8, ease: 'easeOut', delay: 0.2 }}
-                className="relative h-96 md:h-full"
-              >
-                {/* Gradient shapes (pseudo-illustration) */}
-                <div className="absolute inset-0 bg-gradient-to-br from-indigo-100 to-purple-100 rounded-3xl overflow-hidden">
-                  {/* Floating shapes */}
-                  <motion.div
-                    animate={{ y: [0, 20, 0] }}
-                    transition={{ duration: 4, repeat: Infinity }}
-                    className="absolute top-10 left-10 w-32 h-32 bg-gradient-to-br from-indigo-500 to-purple-500 rounded-2xl opacity-70 blur-2xl"
-                  />
-                  <motion.div
-                    animate={{ y: [0, -20, 0] }}
-                    transition={{ duration: 5, repeat: Infinity }}
-                    className="absolute bottom-10 right-10 w-40 h-40 bg-gradient-to-br from-blue-400 to-indigo-400 rounded-3xl opacity-60 blur-3xl"
-                  />
-
-                  {/* Content cards (mockup of marketplace) */}
-                  <div className="absolute inset-0 flex items-center justify-center">
-                    <motion.div
-                      animate={{ y: [0, 5, 0] }}
-                      transition={{ duration: 3, repeat: Infinity }}
-                      className="bg-white rounded-2xl shadow-xl p-4 max-w-xs"
-                    >
-                      <div className="flex gap-3 mb-3">
-                        <div className="w-12 h-12 bg-gradient-to-br from-indigo-400 to-purple-400 rounded-lg" />
-                        <div>
-                          <div className="h-2 w-24 bg-gray-300 rounded mb-2" />
-                          <div className="h-2 w-16 bg-gray-200 rounded" />
-                        </div>
-                      </div>
-                      <div className="h-2 w-full bg-gray-200 rounded mb-2" />
-                      <div className="h-2 w-3/4 bg-gray-100 rounded" />
-                    </motion.div>
-                  </div>
+        <section className="pt-16 pb-24 md:pt-24 md:pb-28">
+          <div className="section-container grid lg:grid-cols-2 gap-12 items-center">
+            <Stagger className="space-y-6">
+              <StaggerItem><span className="chip">Trusted campus-only ecosystem</span></StaggerItem>
+              <StaggerItem>
+                <h1 className="text-hero-lg max-w-xl">
+                  Student Marketplace,
+                  <span className="bg-gradient-to-r from-blue-600 via-violet-600 to-cyan-500 bg-clip-text text-transparent"> Networking, Notes</span>
+                  {' '}and Real-Time Chat.
+                </h1>
+              </StaggerItem>
+              <StaggerItem><p className="text-lg text-slate-600 max-w-lg leading-relaxed">CampusSwap brings buying, selling, borrowing, and peer collaboration into one premium student platform.</p></StaggerItem>
+              <StaggerItem>
+                <div className="flex flex-wrap gap-4">
+                  <Link to="/signup" className="px-7 py-3 rounded-xl text-white font-semibold bg-gradient-to-r from-blue-600 to-violet-600 shadow-lg shadow-violet-500/25">Start Free</Link>
+                  <Link to="/login" className="px-7 py-3 rounded-xl font-semibold border border-slate-300/40 bg-white/65 text-slate-700">Explore Demo</Link>
                 </div>
-              </motion.div>
-            </div>
+              </StaggerItem>
+              <StaggerItem>
+                <div className="grid grid-cols-3 gap-3 max-w-md">
+                  <div className="premium-card p-3 text-center"><p className="text-xl font-extrabold"><CountUp to={10} suffix="K+" /></p><p className="text-[11px] text-slate-500">Campus users</p></div>
+                  <div className="premium-card p-3 text-center"><p className="text-xl font-extrabold"><CountUp to={50} suffix="K+" /></p><p className="text-[11px] text-slate-500">Listings posted</p></div>
+                  <div className="premium-card p-3 text-center"><p className="text-xl font-extrabold"><CountUp to={99} suffix="%" /></p><p className="text-[11px] text-slate-500">Safe exchanges</p></div>
+                </div>
+              </StaggerItem>
+            </Stagger>
+
+            <Reveal className="relative" y={0}>
+              <div className="premium-card p-6 md:p-8">
+                <div className="space-y-4">
+                  {[
+                    ['Macroeconomics Notes', 'PDF - Semester 4', 'INR 120'],
+                    ['Scientific Calculator', 'Excellent - Hostel B', 'INR 700'],
+                    ['Need Charger Tonight', 'Request - Urgent', 'Bounty INR 250']
+                  ].map((card, idx) => (
+                    <motion.div key={card[0]} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 * idx }} whileHover={{ y: -4 }} className="rounded-2xl border border-slate-200/40 bg-white/80 p-4">
+                      <p className="font-bold text-slate-900">{card[0]}</p>
+                      <p className="text-sm text-slate-500 mt-1">{card[1]}</p>
+                      <p className="text-sm font-semibold text-blue-600 mt-2">{card[2]}</p>
+                    </motion.div>
+                  ))}
+                </div>
+              </div>
+            </Reveal>
           </div>
         </section>
 
-        {/* Social Proof */}
-        <section className="py-12 border-y border-gray-200">
-          <div className="section-container text-center">
-            <p className="text-sm text-gray-600">
-              <span className="font-semibold">Powered by students</span> • No commission on tips • Verified college emails only
-            </p>
-          </div>
-        </section>
-
-        {/* =============== FEATURES SECTION =============== */}
-        <section className="py-20 md:py-32 bg-gray-50">
+        <section className="pb-20">
           <div className="section-container">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              className="text-center mb-16"
-            >
-              <h2 className="text-section-title mb-6">Why Choose CampusSwap?</h2>
-              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                Built specifically for college communities. No hidden fees. Real students. Real trust.
-              </p>
-            </motion.div>
-
-            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-8">
+            <Reveal className="text-center mb-12"><h2 className="text-section-title">Built For A Real Student Ecosystem</h2></Reveal>
+            <Stagger className="grid md:grid-cols-2 xl:grid-cols-4 gap-5">
               {[
-                {
-                  icon: '🔐',
-                  title: 'Verified Campus Network',
-                  desc: 'Only authenticated college students. No strangers, no scams.'
-                },
-                {
-                  icon: '💰',
-                  title: 'Fair Marketplace',
-                  desc: 'Peer-to-peer trading. Set your own prices, negotiate freely.'
-                },
-                {
-                  icon: '💬',
-                  title: 'Instant Chat',
-                  desc: 'Real-time messaging. Negotiate quickly. Make deals safe.'
-                },
-                {
-                  icon: '⭐',
-                  title: 'Ratings & Reviews',
-                  desc: 'Build reputation. See who you can trust on campus.'
-                }
-              ].map((feature, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.1 }}
-                  whileHover={{ scale: 1.05, y: -5 }}
-                  className="bg-white rounded-2xl p-8 shadow-lg hover:shadow-2xl transition-all duration-300"
-                >
-                  <div className="text-5xl mb-4">{feature.icon}</div>
-                  <h3 className="text-feature-title mb-3 text-gray-900">{feature.title}</h3>
-                  <p className="text-body-sm">{feature.desc}</p>
-                </motion.div>
+                ['Marketplace', 'Sell, swap, and discover trusted student deals with premium search.'],
+                ['Notes Exchange', 'Upload and discover academic notes with branch and semester filters.'],
+                ['Real-Time Chat', 'Fast conversations, typing states, unread badges, and presence signals.'],
+                ['Moderation Layer', 'Reports queue, admin actions, and safer campus interactions by design.']
+              ].map((feature) => (
+                <StaggerItem key={feature[0]} className="premium-card p-6">
+                  <h3 className="text-feature-title">{feature[0]}</h3>
+                  <p className="text-body-sm mt-2">{feature[1]}</p>
+                </StaggerItem>
               ))}
-            </div>
+            </Stagger>
           </div>
         </section>
 
-        {/* =============== HOW IT WORKS SECTION =============== */}
-        <section className="py-20 md:py-32 bg-white">
+        <section className="pb-20">
+          <div className="section-container grid lg:grid-cols-3 gap-6">
+            {[
+              ['01', 'Create your profile', 'Join with your campus identity and unlock trusted interactions.'],
+              ['02', 'Discover or post', 'List items, share notes, post requests, and browse instantly.'],
+              ['03', 'Connect and close', 'Message peers in real time and complete safer exchanges.']
+            ].map((step, idx) => (
+              <Reveal key={step[0]} delay={idx * 0.08} className="premium-card p-6">
+                <p className="text-4xl font-black bg-gradient-to-r from-blue-600 to-violet-600 bg-clip-text text-transparent">{step[0]}</p>
+                <h3 className="mt-2 text-feature-title">{step[1]}</h3>
+                <p className="text-body-sm mt-2">{step[2]}</p>
+              </Reveal>
+            ))}
+          </div>
+        </section>
+
+        <section className="pb-20">
+          <div className="section-container grid lg:grid-cols-2 gap-8 items-start">
+            <Reveal className="premium-card p-8">
+              <h2 className="text-section-title text-4xl mb-4">About CampusSwap</h2>
+              <p className="text-body-sm text-base">CampusSwap is designed as a student-first ecosystem, not just a listing board. It combines commerce, academic sharing, peer networking, and trusted moderation in one place.</p>
+              <div className="grid sm:grid-cols-2 gap-3 mt-6">
+                {['Marketplace listings', 'Notes and resources', 'Direct student chat', 'Requests and bounties', 'Connections and profiles', 'Admin moderation flow'].map((feature) => (
+                  <motion.div key={feature} whileHover={{ y: -2 }} className="premium-surface px-4 py-3 text-sm font-semibold">{feature}</motion.div>
+                ))}
+              </div>
+            </Reveal>
+            <Reveal className="premium-card p-8" delay={0.1}>
+              <h3 className="text-feature-title text-2xl mb-4">Frequently Asked Questions</h3>
+              <div className="space-y-3">
+                {faqs.map((faq, idx) => (
+                  <div key={faq.q} className="premium-surface p-4">
+                    <button className="w-full text-left flex items-center justify-between" onClick={() => setOpenFaq((prev) => (prev === idx ? -1 : idx))}>
+                      <span className="font-semibold">{faq.q}</span>
+                      <span className="text-slate-500">{openFaq === idx ? '-' : '+'}</span>
+                    </button>
+                    {openFaq === idx && <motion.p initial={{ opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} className="text-body-sm mt-3">{faq.a}</motion.p>}
+                  </div>
+                ))}
+              </div>
+            </Reveal>
+          </div>
+        </section>
+
+        <section className="pb-20">
           <div className="section-container">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-              className="text-center mb-20"
-            >
-              <h2 className="text-section-title mb-6">Get Started in 3 Steps</h2>
-              <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-                From signup to first trade in minutes.
-              </p>
-            </motion.div>
-
-            <div className="grid md:grid-cols-3 gap-12">
-              {[
-                {
-                  step: '01',
-                  title: 'Sign Up',
-                  desc: 'Create your account using your college email. Instant verification.'
-                },
-                {
-                  step: '02',
-                  title: 'Post or Browse',
-                  desc: 'List items for sale or find exactly what you need from peers.'
-                },
-                {
-                  step: '03',
-                  title: 'Connect & Trade',
-                  desc: 'Chat securely, negotiate, and complete transactions on campus.'
-                }
-              ].map((item, i) => (
-                <motion.div
-                  key={i}
-                  initial={{ opacity: 0, y: 40 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  transition={{ delay: i * 0.15 }}
-                  className="relative"
-                >
-                  {/* Step number background */}
-                  <div className="absolute -top-8 -left-8 text-8xl font-display font-black text-indigo-100 opacity-50 blur-sm">
-                    {item.step}
-                  </div>
-
-                  {/* Content */}
-                  <div className="relative z-10 bg-gradient-to-br from-indigo-50 to-transparent rounded-2xl p-8 border border-indigo-100/50">
-                    <div className="text-5xl mb-4 font-display font-black text-transparent bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text">
-                      {item.step}
-                    </div>
-                    <h3 className="text-feature-title mb-3 text-gray-900">{item.title}</h3>
-                    <p className="text-body-sm">{item.desc}</p>
-                  </div>
-
-                  {/* Arrow connector (hidden on last item) */}
-                  {i < 2 && (
-                    <div className="hidden md:flex absolute -right-6 top-1/2 -translate-y-1/2">
-                      <motion.div
-                        animate={{ x: [0, 8, 0] }}
-                        transition={{ duration: 2, repeat: Infinity }}
-                      >
-                        →
-                      </motion.div>
-                    </div>
-                  )}
-                </motion.div>
-              ))}
+            <div className="premium-card p-8 md:p-10 text-center bg-gradient-to-r from-blue-600/95 via-violet-600/95 to-cyan-600/95 text-white border-0">
+              <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight">Ready to launch CampusSwap on your campus?</h2>
+              <p className="mt-4 text-white/85 max-w-2xl mx-auto">From listings and notes to networking and moderation, this is a complete student platform foundation.</p>
+              <div className="mt-8">
+                <Link to="/signup" className="inline-flex rounded-xl bg-white text-slate-900 font-bold px-7 py-3">Create Account</Link>
+              </div>
             </div>
           </div>
         </section>
 
-        {/* =============== FINAL CTA =============== */}
-        <section className="py-20 md:py-32 bg-gradient-to-r from-indigo-600 via-purple-600 to-blue-600">
-          <div className="section-container text-center">
-            <motion.div
-              initial={{ opacity: 0, y: 30 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.6 }}
-            >
-              <h2 className="text-section-title text-white mb-8">
-                Join Your Campus Community Today
-              </h2>
-              <p className="text-xl text-white/90 mb-12 max-w-2xl mx-auto">
-                Stop wasting money on overpriced textbooks. Trade smarter with your classmates.
-              </p>
-              <Link to="/signup">
-                <motion.button
-                  whileHover={{ scale: 1.07 }}
-                  whileTap={{ scale: 0.95 }}
-                  className="px-8 py-4 bg-white text-indigo-600 font-bold rounded-xl shadow-xl hover:shadow-2xl transition-all"
-                >
-                  Create Your Free Account
-                </motion.button>
-              </Link>
-            </motion.div>
+        <footer className="py-10 border-t border-slate-200/20">
+          <div className="section-container grid md:grid-cols-4 gap-6">
+            <div>
+              <p className="font-black text-lg bg-gradient-to-r from-blue-600 to-violet-500 bg-clip-text text-transparent">CampusSwap</p>
+              <p className="text-body-sm mt-2">Premium student ecosystem platform.</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-2">Platform</p>
+              <p className="text-body-sm">Marketplace</p>
+              <p className="text-body-sm">Notes</p>
+              <p className="text-body-sm">Chat</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-2">Community</p>
+              <p className="text-body-sm">Connections</p>
+              <p className="text-body-sm">Requests</p>
+              <p className="text-body-sm">Moderation</p>
+            </div>
+            <div>
+              <p className="font-semibold mb-2">Access</p>
+              <p className="text-body-sm">Login</p>
+              <p className="text-body-sm">Signup</p>
+              <p className="text-body-sm">Admin</p>
+            </div>
           </div>
-        </section>
-
-        {/* Footer */}
-        <footer className="py-8 bg-gray-900 text-center text-gray-400">
-          <p className="text-sm">© 2024 CampusSwap. Your college marketplace.</p>
         </footer>
       </div>
     </PageTransition>

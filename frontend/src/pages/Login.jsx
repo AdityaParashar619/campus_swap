@@ -24,7 +24,7 @@ export default function Login() {
       login(user, token);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.error || 'Login failed');
+      setError(err.response?.data?.message || 'Login failed');
     } finally {
       setLoading(false);
     }
@@ -40,7 +40,7 @@ export default function Login() {
           className="w-full max-w-md bg-white rounded-2xl shadow-lg p-8 border border-gray-100"
         >
           <h2 className="text-3xl font-bold text-gray-900 mb-2">Welcome Back</h2>
-          <p className="text-gray-600 mb-8">Login to your CampusSwap account</p>
+          <p className="text-gray-600 mb-8">Login to your CampusSwap ecosystem</p>
 
           {error && (
             <motion.div
@@ -70,7 +70,7 @@ export default function Login() {
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="••••••••"
+                placeholder="********"
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
@@ -88,6 +88,10 @@ export default function Login() {
               </button>
             </motion.div>
           </form>
+
+          <div className='mt-4 text-right'>
+            <Link to='/forgot-password' className='text-sm text-indigo-600 hover:underline'>Forgot password?</Link>
+          </div>
 
           <p className="text-center text-gray-600 mt-6">
             Don't have an account?{' '}

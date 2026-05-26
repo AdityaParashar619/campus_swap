@@ -1,20 +1,14 @@
 import mongoose from 'mongoose';
 
-const bountySchema = new mongoose.Schema({
-  title: {
-    type: String,
-    required: true
+const bountySchema = new mongoose.Schema(
+  {
+    title: { type: String, required: true, trim: true },
+    description: { type: String, default: '', trim: true },
+    user: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true }
   },
-  description: String,
-  user: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
-    required: true
-  },
-  createdAt: {
-    type: Date,
-    default: Date.now
-  }
-});
+  { timestamps: true }
+);
+
+bountySchema.index({ createdAt: -1 });
 
 export default mongoose.model('Bounty', bountySchema);
