@@ -33,7 +33,7 @@ export default function About() {
                 </p>
                 <div className="mt-6 flex flex-wrap gap-3">
                   <Link className="rounded-lg bg-gradient-to-r from-blue-600 via-cyan-600 to-emerald-500 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-cyan-500/20" to="/listings">Explore marketplace</Link>
-                  <Link className="rounded-lg border border-slate-300/50 px-5 py-3 text-sm font-bold text-slate-800 hover:bg-white dark:border-slate-700 dark:text-slate-100 dark:hover:bg-slate-900" to="/feedback">Submit feedback</Link>
+                  <Link className="rounded-lg bg-slate-200 px-5 py-3 text-sm font-bold text-slate-900 hover:bg-slate-300 dark:bg-slate-700 dark:text-white dark:hover:bg-slate-600" to="/feedback">Submit feedback</Link>
                 </div>
               </div>
 

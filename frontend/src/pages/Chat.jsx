@@ -2,8 +2,8 @@ import { motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { io } from 'socket.io-client';
-import { Button, PageTransition, PremiumCard } from '../components/ui';
 import ReportDialog from '../components/ReportDialog';
+import { Button, PageTransition, PremiumCard } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
 import Layout from '../layouts/Layout';
 import { authAPI, messageAPI } from '../services/api';
@@ -257,7 +257,7 @@ export default function Chat() {
                         value={newMessage}
                         onChange={(e) => onMessageChange(e.target.value)}
                         placeholder="Write a message"
-                        className="premium-surface min-w-0 flex-1 px-4 py-3 text-slate-950 placeholder:text-slate-400 dark:text-white"
+                        className="premium-surface min-w-0 flex-1 px-4 py-3 text-slate-950 placeholder:text-slate-500 dark:placeholder:text-slate-400 dark:text-white bg-slate-50 dark:bg-slate-900"
                       />
                       <Button variant="gradient" type="submit" className="shrink-0">Send</Button>
                     </form>

@@ -1,6 +1,6 @@
 import { useState } from 'react';
-import { Button } from './ui';
 import { reportAPI } from '../services/api';
+import { Button } from './ui';
 
 const reasons = [
   ['abusive_chat', 'Abusive chat'],
@@ -57,20 +57,26 @@ export default function ReportDialog({ open, onClose, targetType = 'user', targe
         </div>
 
         <form onSubmit={submitReport} className="space-y-4">
-          <select className="premium-surface w-full px-4 py-3" value={reason} onChange={(event) => setReason(event.target.value)}>
-            {reasons.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
-          </select>
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Report Reason</label>
+            <select className="premium-surface w-full px-4 py-3 text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg" value={reason} onChange={(event) => setReason(event.target.value)}>
+              {reasons.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+            </select>
+          </div>
 
-          <textarea
-            className="premium-surface w-full px-4 py-3"
-            rows="4"
-            placeholder="Describe what happened. Include chat context, time, or anything admins should know."
-            value={explanation}
-            onChange={(event) => setExplanation(event.target.value)}
-            required
-          />
+          <div className="flex flex-col gap-2">
+            <label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Details</label>
+            <textarea
+              className="premium-surface w-full px-4 py-3 text-slate-900 dark:text-white bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg placeholder:text-slate-400 dark:placeholder:text-slate-500"
+              rows="4"
+              placeholder="Describe what happened. Include chat context, time, or anything admins should know."
+              value={explanation}
+              onChange={(event) => setExplanation(event.target.value)}
+              required
+            />
+          </div>
 
-          {status && <p className="rounded-lg bg-blue-50 px-3 py-2 text-sm font-medium text-blue-700">{status}</p>}
+          {status && <div className="rounded-lg bg-emerald-50 dark:bg-emerald-400/10 px-4 py-3 text-sm font-semibold text-emerald-700 dark:text-emerald-200 border border-emerald-200 dark:border-emerald-400/30">{status}</div>}
 
           <div className="flex justify-end gap-3">
             <Button type="button" variant="secondary" onClick={onClose}>Cancel</Button>
