@@ -21,11 +21,6 @@ export default {
       backdropBlur: {
         'xs': '2px',
       },
-      fontSize: {
-        'hero-lg': ['72px', { lineHeight: '1.1', letterSpacing: '-0.02em', fontWeight: '900', fontFamily: 'Poppins' }],
-        'section-title': ['48px', { lineHeight: '1.2', letterSpacing: '-0.01em', fontWeight: '700', fontFamily: 'Poppins' }],
-        'feature-title': ['24px', { lineHeight: '1.4', letterSpacing: '-0.005em', fontWeight: '700', fontFamily: 'Poppins' }],
-      },
       letterSpacing: {
         'tight-hero': '-0.02em',
         'tight': '-0.01em',
