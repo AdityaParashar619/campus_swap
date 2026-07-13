@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { PageTransition } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
-import { authAPI } from '../services/api';
+import { authAPI, getApiErrorMessage } from '../services/api';
 
 export default function Signup() {
   const [formData, setFormData] = useState({
@@ -32,7 +32,7 @@ export default function Signup() {
       login(user, token);
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.error || 'Signup failed');
+      setError(getApiErrorMessage(err, 'Signup failed'));
     } finally {
       setLoading(false);
     }
@@ -69,6 +69,7 @@ export default function Signup() {
                 value={formData.name}
                 onChange={handleChange}
                 placeholder="John Doe"
+                required
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
@@ -81,6 +82,7 @@ export default function Signup() {
                 value={formData.email}
                 onChange={handleChange}
                 placeholder="you@college.edu"
+                required
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
@@ -93,6 +95,7 @@ export default function Signup() {
                 value={formData.enrollmentNumber}
                 onChange={handleChange}
                 placeholder="A123456"
+                required
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>
@@ -105,6 +108,8 @@ export default function Signup() {
                 value={formData.password}
                 onChange={handleChange}
                 placeholder="••••••••"
+                minLength={8}
+                required
                 className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
               />
             </div>

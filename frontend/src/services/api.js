@@ -1,7 +1,19 @@
 import axios from 'axios';
 
+const getApiBaseUrl = () => {
+  const configuredBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
+  return configuredBaseUrl || '/api';
+};
+
+export const getApiErrorMessage = (error, fallback = 'Request failed') =>
+  error?.userMessage ||
+  error?.response?.data?.message ||
+  error?.response?.data?.error ||
+  error?.message ||
+  fallback;
+
 const API = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || '/api',
+  baseURL: getApiBaseUrl(),
   timeout: 15000
 });
 
@@ -14,7 +26,12 @@ API.interceptors.request.use((config) => {
 API.interceptors.response.use(
   (response) => response,
   (error) => {
+    const contentType = error?.response?.headers?.['content-type'] || '';
+    const returnedHtml = typeof error?.response?.data === 'string' && /text\/html/i.test(contentType);
     const normalizedMessage =
+      (returnedHtml
+        ? 'The API endpoint returned the web app instead of JSON. Configure the deployed backend URL/API proxy.'
+        : null) ||
       error?.response?.data?.message ||
       error?.response?.data?.error ||
       error?.message ||

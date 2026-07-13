@@ -116,4 +116,12 @@ VITE_API_BASE_URL=<deployed backend URL>/api
 VITE_SOCKET_URL=<deployed backend URL>
 ```
 
+For Vercel frontend deployments, set this server-side environment variable as well:
+
+```env
+API_PROXY_TARGET=<deployed backend URL>/api
+```
+
+The Vercel build uses `/api/*` as a same-origin proxy to the backend. Without `API_PROXY_TARGET` or `VITE_API_BASE_URL`, authentication requests cannot reach Express and signup/login will fail.
+
 Do not deploy with the local demo admin password from `backend/.env`.
