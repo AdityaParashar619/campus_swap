@@ -1,5 +1,6 @@
 # CampusSwap
 
+live demo: https://campus-swap-alpha.vercel.app/
 CampusSwap is a student ecosystem platform with marketplace, notes exchange, networking, requests, chat, notifications, and moderation.
 
 ## Stack
