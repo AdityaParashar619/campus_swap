@@ -2,7 +2,7 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { asyncHandler } from '../middleware/errorMiddleware.js';
 import { env } from '../config/env.js';
-import { BadRequest, NotFound, Unauthorized } from '../utils/AppError.js';
+import { BadRequest, Conflict, Forbidden, NotFound, Unauthorized } from '../utils/AppError.js';
 import { createResetToken, signAuthToken } from '../utils/auth.js';
 import Connection from '../models/Connection.js';
 import Listing from '../models/Listing.js';
@@ -38,7 +38,7 @@ export const register = asyncHandler(async (req, res) => {
   if (!name || !email || !enrollmentNumber || !password) throw new BadRequest('All fields required');
 
   const existingUser = await User.findOne({ $or: [{ email }, { enrollmentNumber }] });
-  if (existingUser) throw new BadRequest('Email or enrollment number already exists');
+  if (existingUser) throw new Conflict('Email or enrollment number already exists');
 
   const user = await User.create({
     name,
@@ -58,6 +58,8 @@ export const login = asyncHandler(async (req, res) => {
   const user = await User.findOne({ email: email.toLowerCase() });
   if (!user) throw new Unauthorized('Invalid credentials');
 
+  if (user.isBlocked) throw new Forbidden('Account is blocked by admin');
+
   const isMatch = await bcrypt.compare(password, user.password);
   if (!isMatch) throw new Unauthorized('Invalid credentials');
 
@@ -71,7 +73,7 @@ export const forgotPassword = asyncHandler(async (req, res) => {
 
   const user = await User.findOne({ email: email.toLowerCase() });
   if (!user) {
-    return res.json({ success: true, message: 'If this email exists, reset instructions have been generated.' });
+    return res.json({ success: true, message: 'If this email exists, reset instructions have been sent.' });
   }
 
   const { rawToken, hashedToken, expiresAt } = createResetToken();
@@ -79,8 +81,16 @@ export const forgotPassword = asyncHandler(async (req, res) => {
   user.resetPasswordExpiresAt = new Date(expiresAt);
   await user.save();
 
-  const resetUrl = `${env.frontendUrl}/reset-password?token=${rawToken}`;
-  res.json({ success: true, message: 'Password reset token generated.', data: { resetUrl } });
+  const response = {
+    success: true,
+    message: 'If this email exists, reset instructions have been sent.'
+  };
+
+  if (env.nodeEnv !== 'production') {
+    response.data = { resetUrl: `${env.frontendUrl}/reset-password?token=${rawToken}` };
+  }
+
+  res.json(response);
 });
 
 export const resetPassword = asyncHandler(async (req, res) => {

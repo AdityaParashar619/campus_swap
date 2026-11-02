@@ -9,14 +9,14 @@ import {
   updateProfile
 } from '../controllers/authController.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
-import { validateAuthPayload, validateBody } from '../middleware/validateMiddleware.js';
+import { validateAuthPayload, validateBody, validatePasswordResetPayload } from '../middleware/validateMiddleware.js';
 
 const router = express.Router();
 
 router.post('/register', validateBody(['name', 'email', 'enrollmentNumber', 'password']), validateAuthPayload('register'), register);
 router.post('/login', validateBody(['email', 'password']), validateAuthPayload('login'), login);
 router.post('/forgot-password', validateBody(['email']), forgotPassword);
-router.post('/reset-password', validateBody(['token', 'password']), resetPassword);
+router.post('/reset-password', validatePasswordResetPayload, resetPassword);
 
 router.get('/users', authMiddleware, getAllUsers);
 router.get('/me', authMiddleware, getMe);

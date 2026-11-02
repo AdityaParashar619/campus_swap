@@ -1,6 +1,8 @@
 const HOP_BY_HOP_HEADERS = new Set([
   'connection',
+  'accept-encoding',
   'content-length',
+  'content-encoding',
   'host',
   'keep-alive',
   'proxy-authenticate',

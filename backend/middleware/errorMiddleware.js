@@ -1,7 +1,7 @@
 import { env } from '../config/env.js';
 
 export const errorHandler = (err, req, res, _next) => {
-  const status = err.status || err.statusCode || 500;
+  let status = err.status || err.statusCode || 500;
   const message = err.message || 'Internal Server Error';
   let details = err.details || {};
 
@@ -13,8 +13,14 @@ export const errorHandler = (err, req, res, _next) => {
   }
 
   if (err.code === 11000) {
+    status = 409;
     const field = Object.keys(err.keyPattern || {})[0];
     details = { field };
+  }
+
+  if (err.name === 'CastError') {
+    status = 400;
+    details = { field: err.path };
   }
 
   res.status(status).json({

@@ -48,6 +48,8 @@ JWT_SECRET=replace-with-long-random-secret
 JWT_EXPIRES_IN=7d
 FRONTEND_URL=http://localhost:5173
 NODE_ENV=development
+DATABASE_CONNECT_TIMEOUT_MS=5000
+DATABASE_RETRY_INTERVAL_MS=30000
 RATE_LIMIT_WINDOW_MS=900000
 RATE_LIMIT_MAX=200
 SEED_ON_STARTUP=false
@@ -106,10 +108,12 @@ Backend:
 ```env
 MONGO_URI=<MongoDB Atlas connection string>
 JWT_SECRET=<long random secret>
-FRONTEND_URL=<deployed frontend URL>
+FRONTEND_URL=<deployed frontend URL>,<optional Vercel preview URL>
 ADMIN_EMAIL=<admin login email>
 ADMIN_PASSWORD=<strong admin password>
 ADMIN_NAME=CampusSwap Admin
+DATABASE_CONNECT_TIMEOUT_MS=5000
+DATABASE_RETRY_INTERVAL_MS=30000
 ```
 
 Frontend:
@@ -125,5 +129,14 @@ API_PROXY_TARGET=<deployed backend URL>/api
 ```
 
 The Vercel build uses `/api/*` as a same-origin proxy to the backend. Without `API_PROXY_TARGET` or `VITE_API_BASE_URL`, authentication requests cannot reach Express and signup/login will fail.
+
+Health endpoints:
+
+```text
+GET <backend URL>/health
+GET <backend URL>/api/health
+```
+
+They return `200` only when MongoDB is connected and `503` with a `DEGRADED` status while the API is reconnecting. This avoids hanging API requests when Atlas is unavailable.
 
 Do not deploy with the local demo admin password from `backend/.env`.
