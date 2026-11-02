@@ -52,3 +52,21 @@ export const validateAuthPayload = (mode = 'login') => (req, _res, next) => {
 
   next();
 };
+
+export const validatePasswordResetPayload = (req, _res, next) => {
+  const token = String(req.body?.token || '').trim();
+  const password = String(req.body?.password || '');
+  const errors = {};
+
+  if (!token) errors.token = 'Reset token is required';
+  if (!password) errors.password = 'Password is required';
+  else if (password.length < 8) errors.password = 'Password must be at least 8 characters';
+
+  if (Object.keys(errors).length > 0) {
+    return next({ status: 400, message: 'Validation failed', details: errors });
+  }
+
+  req.body.token = token;
+  req.body.password = password;
+  next();
+};

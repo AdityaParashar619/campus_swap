@@ -6,11 +6,13 @@ const getApiBaseUrl = () => {
 };
 
 export const getApiErrorMessage = (error, fallback = 'Request failed') =>
-  error?.userMessage ||
-  error?.response?.data?.message ||
-  error?.response?.data?.error ||
-  error?.message ||
-  fallback;
+  error?.code === 'ECONNABORTED'
+    ? 'The server did not respond in time. It may be starting up; please retry in a moment.'
+    : error?.userMessage ||
+      error?.response?.data?.message ||
+      error?.response?.data?.error ||
+      error?.message ||
+      fallback;
 
 const API = axios.create({
   baseURL: getApiBaseUrl(),
