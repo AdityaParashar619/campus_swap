@@ -6,7 +6,7 @@ import ReportDialog from '../components/ReportDialog';
 import { Button, PageTransition, PremiumCard } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
 import Layout from '../layouts/Layout';
-import { authAPI, messageAPI } from '../services/api';
+import { authAPI, getAccessToken, messageAPI } from '../services/api';
 
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
 
@@ -34,7 +34,7 @@ export default function Chat() {
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    const newSocket = io(SOCKET_URL);
+    const newSocket = io(SOCKET_URL, { auth: { token: getAccessToken() } });
     newSocket.emit('register', user?.id);
     setSocket(newSocket);
 

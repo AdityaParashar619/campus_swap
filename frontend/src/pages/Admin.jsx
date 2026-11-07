@@ -2,6 +2,8 @@ import { useEffect, useState } from 'react';
 import { PageTransition, PremiumCard, Button } from '../components/ui';
 import Layout from '../layouts/Layout';
 import { adminAPI } from '../services/api';
+import { Link } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
 
 const statusTone = {
   open: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
@@ -11,6 +13,7 @@ const statusTone = {
 };
 
 export default function Admin() {
+  const { user } = useAuth();
   const [overview, setOverview] = useState({ users: 0, listings: 0, reportsOpen: 0, reportsTotal: 0 });
   const [reports, setReports] = useState([]);
   const [users, setUsers] = useState([]);
@@ -71,6 +74,7 @@ export default function Admin() {
           <div className="section-container space-y-7">
             <div>
               <p className="chip mb-3">Admin controls</p>
+              {['college_admin', 'super_admin'].includes(user?.role) && <Link to="/admin/users" className="inline-flex mb-4 rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white">Identity and user management</Link>}
               <h1 className="text-section-title">Moderation Command Center</h1>
               <p className="text-body-sm mt-2">Review reports, block abusive users, and hide unsafe listings.</p>
             </div>

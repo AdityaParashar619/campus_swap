@@ -37,8 +37,11 @@ export const sendMessage = asyncHandler(async (req, res) => {
 export const getMessages = asyncHandler(async (req, res) => {
   const { userId } = req.params;
   const currentUserId = req.user.userId;
+  const page = Math.max(Number(req.query.page) || 1, 1);
+  const limit = Math.min(Math.max(Number(req.query.limit) || 50, 1), 100);
+  const skip = (page - 1) * limit;
 
-  const [messages, access] = await Promise.all([
+  const [messages, total, access] = await Promise.all([
     Message.find({
       $or: [
         { sender: currentUserId, receiver: userId },
@@ -46,9 +49,17 @@ export const getMessages = asyncHandler(async (req, res) => {
       ]
     })
       .populate('sender receiver', 'name profilePicture')
-      .sort({ createdAt: 1 }),
+      .sort({ createdAt: -1 })
+      .skip(skip)
+      .limit(limit),
+    Message.countDocuments({
+      $or: [
+        { sender: currentUserId, receiver: userId },
+        { sender: userId, receiver: currentUserId }
+      ]
+    }),
     getChatAccess(currentUserId, userId)
   ]);
 
-  res.json({ success: true, data: messages, chatAccess: access });
+  res.json({ success: true, data: messages.reverse(), chatAccess: access, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
 });

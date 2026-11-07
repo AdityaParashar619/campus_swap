@@ -1,142 +1,54 @@
 # CampusSwap
 
-live demo: https://campus-swap-alpha.vercel.app/
+CampusSwap is a campus-focused student ecosystem built as a React/Vite frontend and a Node.js/Express modular monolith backed by MongoDB/Mongoose. Current features include marketplace listings, notes, requests, networking, messaging, notifications, reports, and moderation.
 
-CampusSwap is a student ecosystem platform with marketplace, notes exchange, networking, requests, chat, notifications, and moderation.
-
-## Stack
-- Frontend: React + Vite + Tailwind + Framer Motion
-- Backend: Node.js + Express + Socket.io
-- Database: MongoDB + Mongoose
-- Auth: JWT
-
-## Project Structure
-```text
-campus_swap/
-  backend/
-    config/
-    controllers/
-    middleware/
-    models/
-    routes/
-    scripts/
-    utils/
-    server.js
-  frontend/
-    src/
-      components/
-      context/
-      hooks/
-      layouts/
-      pages/
-      services/
-```
-
-## Prerequisites
-- Node.js 20+ (you already have Node 24)
-- MongoDB Community Server (local) OR MongoDB Atlas URI
-
-## Environment Setup
-
-### Backend `.env`
-Path: `backend/.env`
-
-```env
-PORT=5000
-MONGO_URI=mongodb://127.0.0.1:27017/campusswap
-JWT_SECRET=replace-with-long-random-secret
-JWT_EXPIRES_IN=7d
-FRONTEND_URL=http://localhost:5173
-NODE_ENV=development
-DATABASE_CONNECT_TIMEOUT_MS=5000
-DATABASE_RETRY_INTERVAL_MS=30000
-RATE_LIMIT_WINDOW_MS=900000
-RATE_LIMIT_MAX=200
-SEED_ON_STARTUP=false
-```
-
-## Run Locally
-
-### 1) Start MongoDB
-If installed as service (Windows PowerShell as Admin):
-```powershell
-net start MongoDB
-```
-
-If not installed as service, start manually:
-```powershell
-"C:\Program Files\MongoDB\Server\8.0\bin\mongod.exe" --dbpath "C:\data\db"
-```
-
-### 2) Start Backend
-```powershell
-cd C:\Users\devan\campus_swap\campus_swap\backend
-npm run dev
-```
-
-### 3) Start Frontend
-```powershell
-cd C:\Users\devan\campus_swap\campus_swap\frontend
-npm run dev
-```
-
-## If `npm` fails in PowerShell
-Run once in an Admin PowerShell:
-```powershell
-Set-ExecutionPolicy -Scope CurrentUser -ExecutionPolicy RemoteSigned
-```
-
-Then close and reopen PowerShell.
-
-## If backend says `ECONNREFUSED 127.0.0.1:27017`
-MongoDB is not running yet. Start MongoDB first, then rerun backend.
-
-## Notes
-- Backend now defaults to `mongodb://127.0.0.1:27017/campusswap` if `MONGO_URI` is not provided.
-- Startup errors now print clear MongoDB setup tips.
-
-## Public Deployment
-
-The repo includes `render.yaml` for Render deployment:
-
-- `campusswap-api`: Node backend from `backend/`
-- `campusswap-web`: static frontend from `frontend/`
-
-Required production environment variables:
-
-Backend:
-```env
-MONGO_URI=<MongoDB Atlas connection string>
-JWT_SECRET=<long random secret>
-FRONTEND_URL=<deployed frontend URL>,<optional Vercel preview URL>
-ADMIN_EMAIL=<admin login email>
-ADMIN_PASSWORD=<strong admin password>
-ADMIN_NAME=CampusSwap Admin
-DATABASE_CONNECT_TIMEOUT_MS=5000
-DATABASE_RETRY_INTERVAL_MS=30000
-```
-
-Frontend:
-```env
-VITE_API_BASE_URL=<deployed backend URL>/api
-VITE_SOCKET_URL=<deployed backend URL>
-```
-
-For Vercel frontend deployments, set this server-side environment variable as well:
-
-```env
-API_PROXY_TARGET=<deployed backend URL>/api
-```
-
-The Vercel build uses `/api/*` as a same-origin proxy to the backend. Without `API_PROXY_TARGET` or `VITE_API_BASE_URL`, authentication requests cannot reach Express and signup/login will fail.
-
-Health endpoints:
+## Repository layout
 
 ```text
-GET <backend URL>/health
-GET <backend URL>/api/health
+backend/       Express API, Socket.IO, Mongoose models, tests
+frontend/      React SPA and Vite build
+docs/          Audit, architecture, database, setup, and DevOps notes
+docker-compose.yml
 ```
 
-They return `200` only when MongoDB is connected and `503` with a `DEGRADED` status while the API is reconnecting. This avoids hanging API requests when Atlas is unavailable.
+## Start locally
 
-Do not deploy with the local demo admin password from `backend/.env`.
+Use Node.js 22+, copy `backend/.env.example` to `backend/.env`, set a private JWT secret, and start MongoDB. Then run `npm ci && npm run dev` in `backend/` and `npm ci && npm run dev` in `frontend/`. See [Development Setup](docs/DEVELOPMENT_SETUP.md) for Docker, environment details, and troubleshooting.
+
+## Docker
+
+Copy root `.env.example` to `.env`, set `JWT_SECRET`, then run:
+
+```sh
+docker compose up --build
+```
+
+Open `http://localhost:8080`. Logs: `docker compose logs -f`; stop: `docker compose down`. `docker compose down -v` removes the local database volume.
+
+## Checks
+
+```sh
+cd backend && npm test
+cd frontend && npm run build
+```
+
+CI runs backend tests and the frontend production build for pushes and pull requests to `main` and `develop`. The frontend currently has no configured test or lint scripts.
+
+## Architecture and operations
+
+- [Codebase audit](docs/CODEBASE_AUDIT.md)
+- [Architecture](docs/ARCHITECTURE.md)
+- [Database design](docs/DATABASE_DESIGN.md)
+- [Development setup](docs/DEVELOPMENT_SETUP.md)
+- [DevOps pipeline](docs/DEVOPS_PIPELINE.md)
+- [API documentation](docs/API_DOCUMENTATION.md)
+- [Security decisions and configuration](docs/SECURITY.md)
+- [Phase 1 IAM completion report](docs/PHASE_1_COMPLETION_REPORT.md)
+
+## Identity configuration
+
+Student registration requires the institution's approved domains in backend `ALLOWED_COLLEGE_DOMAINS`; optional enrollment, department, branch, club, and semester values are configured using `ENROLLMENT_PATTERN`, `INSTITUTION_DEPARTMENTS`, `INSTITUTION_BRANCHES`, `INSTITUTION_CLUBS`, and `INSTITUTION_SEMESTERS`. Configure `EMAIL_PROVIDER_URL`, `EMAIL_PROVIDER_API_KEY`, and a separate `OTP_PEPPER` for delivery and OTP hashing. Production student registration fails closed without approved domains and email delivery. Alumni accounts stay pending until an authorized institutional review.
+
+For IAM access, configure a dedicated `SUPER_ADMIN_EMAIL` and `SUPER_ADMIN_PASSWORD` before first startup. `ADMIN_EMAIL` creates only the legacy moderation administrator and cannot grant IAM roles. Do not point the super-admin bootstrap at an existing user account.
+
+Readiness health paths remain `/health` and `/api/health`; process liveness is `/live`. Render and Vercel deployment configuration remains in the repository. Set secrets in hosting configuration, not in frontend build variables or committed files. No automatic production deployment is configured.

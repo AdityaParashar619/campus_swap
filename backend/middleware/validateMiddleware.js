@@ -29,8 +29,8 @@ export const validateAuthPayload = (mode = 'login') => (req, _res, next) => {
 
   if (!password) {
     errors.password = 'Password is required';
-  } else if (password.length < 8) {
-    errors.password = 'Password must be at least 8 characters';
+  } else if (mode !== 'login' && (password.length < 12 || password.length > 128)) {
+    errors.password = 'Password must be between 12 and 128 characters';
   }
 
   if (mode === 'register') {
@@ -60,7 +60,7 @@ export const validatePasswordResetPayload = (req, _res, next) => {
 
   if (!token) errors.token = 'Reset token is required';
   if (!password) errors.password = 'Password is required';
-  else if (password.length < 8) errors.password = 'Password must be at least 8 characters';
+  else if (password.length < 12 || password.length > 128) errors.password = 'Password must be between 12 and 128 characters';
 
   if (Object.keys(errors).length > 0) {
     return next({ status: 400, message: 'Validation failed', details: errors });

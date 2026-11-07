@@ -35,6 +35,20 @@ export const createApp = ({ databaseMiddleware = requireDatabase } = {}) => {
 
   app.use(cors(corsOptions));
   app.use(express.json({ limit: '2mb' }));
+  app.use((req, _res, next) => {
+    try {
+      req.cookies = Object.fromEntries((req.headers.cookie || '').split(';').map((part) => part.trim()).filter(Boolean).map((part) => {
+        const separator = part.indexOf('=');
+        const key = separator < 0 ? part : part.slice(0, separator);
+        const value = separator < 0 ? '' : part.slice(separator + 1);
+        return [decodeURIComponent(key), decodeURIComponent(value)];
+      }));
+      next();
+    } catch {
+      req.cookies = {};
+      next();
+    }
+  });
   app.use(requestMetaMiddleware);
   app.use(securityMiddleware);
 
@@ -48,6 +62,9 @@ export const createApp = ({ databaseMiddleware = requireDatabase } = {}) => {
     });
   };
 
+  const liveHandler = (_req, res) => res.status(200).json({ success: true, status: 'OK' });
+  app.get('/live', liveHandler);
+  app.get('/api/live', liveHandler);
   app.get('/health', healthHandler);
   app.get('/api/health', healthHandler);
 

@@ -3,6 +3,7 @@ import Listing from '../models/Listing.js';
 import Report from '../models/Report.js';
 import User from '../models/User.js';
 import { BadRequest, NotFound } from '../utils/AppError.js';
+import RefreshSession from '../models/RefreshSession.js';
 
 export const getAdminOverview = asyncHandler(async (_req, res) => {
   const [users, listings, reportsOpen, reportsTotal] = await Promise.all([
@@ -94,10 +95,15 @@ export const listUsers = asyncHandler(async (_req, res) => {
 
 export const setUserBlockStatus = asyncHandler(async (req, res) => {
   const { isBlocked } = req.body;
-  const user = await User.findByIdAndUpdate(req.params.id, { isBlocked: Boolean(isBlocked) }, { new: true })
-    .select('name email isBlocked');
+  const user = await User.findById(req.params.id).select('name email isBlocked accountStatus tokenVersion');
 
   if (!user) throw new NotFound('User not found');
+
+  user.isBlocked = Boolean(isBlocked);
+  user.accountStatus = user.isBlocked ? 'blocked' : 'active';
+  user.tokenVersion = (user.tokenVersion || 0) + 1;
+  await user.save();
+  await RefreshSession.updateMany({ user: user._id, revokedAt: null }, { $set: { revokedAt: new Date() } });
 
   res.json({ success: true, message: 'User block status updated', data: user });
 });

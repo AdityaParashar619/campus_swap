@@ -69,7 +69,7 @@ export default function Navbar() {
   }, [user]);
 
   const links = [...baseLinks];
-  if (user?.role === 'admin') links.push({ href: '/admin', label: 'Admin' });
+  if (['admin', 'college_admin', 'super_admin'].includes(user?.role)) links.push({ href: '/admin', label: 'Admin' });
 
   const handleLogout = () => {
     logout();

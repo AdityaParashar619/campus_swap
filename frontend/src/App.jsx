@@ -6,6 +6,7 @@ import { PageLoader } from './components/ui';
 import { useAuth } from './hooks/useAuth';
 
 const Admin = lazy(() => import('./pages/Admin'));
+const AdminUsers = lazy(() => import('./pages/AdminUsers'));
 const About = lazy(() => import('./pages/About'));
 const Bounties = lazy(() => import('./pages/Bounties'));
 const Chat = lazy(() => import('./pages/Chat'));
@@ -23,6 +24,9 @@ const NotFound = lazy(() => import('./pages/NotFound'));
 const Profile = lazy(() => import('./pages/Profile'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const Signup = lazy(() => import('./pages/Signup'));
+const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
+const VerifyAlumni = lazy(() => import('./pages/VerifyAlumni'));
+const AccountStatus = lazy(() => import('./pages/AccountStatus'));
 
 const ProtectedRoute = ({ children }) => {
   const { user, loading } = useAuth();
@@ -31,11 +35,12 @@ const ProtectedRoute = ({ children }) => {
   return children;
 };
 
-const AdminRoute = ({ children }) => {
+const AdminRoute = ({ children, iam = false }) => {
   const { user, loading } = useAuth();
   if (loading) return <div className="flex items-center justify-center h-screen">Loading...</div>;
   if (!user) return <Navigate to="/login" replace />;
-  if (user.role !== 'admin') return <Navigate to="/dashboard" replace />;
+  const allowedRoles = iam ? ['college_admin', 'super_admin'] : ['admin', 'college_admin', 'super_admin'];
+  if (!allowedRoles.includes(user.role)) return <Navigate to="/dashboard" replace />;
   return children;
 };
 
@@ -47,6 +52,9 @@ function AppContent() {
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
           <Route path="/signup" element={<Signup />} />
+          <Route path="/verify-email" element={<VerifyEmail />} />
+          <Route path="/verify-alumni" element={<VerifyAlumni />} />
+          <Route path="/account-status" element={<AccountStatus />} />
           <Route path="/forgot-password" element={<ForgotPassword />} />
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
@@ -60,6 +68,7 @@ function AppContent() {
           <Route path="/feedback" element={<ProtectedRoute><Feedback /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
           <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
+          <Route path="/admin/users" element={<AdminRoute iam><AdminUsers /></AdminRoute>} />
           <Route path="/error" element={<Error />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
