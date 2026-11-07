@@ -34,7 +34,7 @@ export default function Footer() {
           <Link className="rounded-lg border border-white/15 px-3 py-2 font-semibold text-slate-100 hover:bg-white/10" to="/about">About</Link>
           <Link className="rounded-lg border border-white/15 px-3 py-2 font-semibold text-slate-100 hover:bg-white/10" to="/notifications">Notifications</Link>
           <Link className="rounded-lg border border-teal-300/30 px-3 py-2 font-semibold text-teal-100 hover:bg-teal-400/10" to="/feedback">Feedback Form</Link>
-          {user?.role === 'admin' && <Link className="rounded-lg border border-white/15 px-3 py-2 font-semibold text-slate-100 hover:bg-white/10" to="/admin">Admin</Link>}
+          {['admin', 'college_admin', 'super_admin'].includes(user?.role) && <Link className="rounded-lg border border-white/15 px-3 py-2 font-semibold text-slate-100 hover:bg-white/10" to="/admin">Admin</Link>}
           {user && (
             <button className="rounded-lg bg-amber-400 px-3 py-2 font-black text-slate-950 hover:bg-amber-300" onClick={() => setReportOpen(true)}>
               Quick Report

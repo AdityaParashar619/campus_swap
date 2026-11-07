@@ -11,13 +11,22 @@ export const createRequestPost = asyncHandler(async (req, res) => {
   res.status(201).json({ success: true, message: 'Request post created', data });
 });
 
-export const getRequestPosts = asyncHandler(async (_req, res) => {
-  const data = await RequestPost.find()
-    .populate('user', 'name profilePicture trustScore')
-    .populate('fulfilledBy', 'name profilePicture trustScore')
-    .populate('responses.user', 'name profilePicture trustScore')
-    .sort({ createdAt: -1 });
-  res.json({ success: true, data });
+export const getRequestPosts = asyncHandler(async (req, res) => {
+  const page = Math.max(Number(req.query.page) || 1, 1);
+  const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), 50);
+  const filter = {};
+  if (req.query.status) filter.status = req.query.status;
+  const [data, total] = await Promise.all([
+    RequestPost.find(filter)
+      .populate('user', 'name profilePicture trustScore')
+      .populate('fulfilledBy', 'name profilePicture trustScore')
+      .populate('responses.user', 'name profilePicture trustScore')
+      .sort({ createdAt: -1 })
+      .skip((page - 1) * limit)
+      .limit(limit),
+    RequestPost.countDocuments(filter)
+  ]);
+  res.json({ success: true, data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
 });
 
 export const respondToRequestPost = asyncHandler(async (req, res) => {

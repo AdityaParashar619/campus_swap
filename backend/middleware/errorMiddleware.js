@@ -2,8 +2,14 @@ import { env } from '../config/env.js';
 
 export const errorHandler = (err, req, res, _next) => {
   let status = err.status || err.statusCode || 500;
-  const message = err.message || 'Internal Server Error';
+  let message = err.message || 'Internal Server Error';
   let details = err.details || {};
+
+  if (status < 400 || status > 599) status = 500;
+  if (status >= 500 && env.nodeEnv === 'production') {
+    message = 'Internal Server Error';
+    details = {};
+  }
 
   if (err.name === 'ValidationError') {
     details = Object.values(err.errors).reduce((acc, field) => {

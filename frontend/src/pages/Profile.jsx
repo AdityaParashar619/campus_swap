@@ -61,7 +61,7 @@ const resizeProfileImage = (file) => new Promise((resolve, reject) => {
 });
 
 export default function Profile() {
-  const { user, login } = useAuth();
+  const { user, login, applyProfile } = useAuth();
   const [profile, setProfile] = useState(emptyProfile);
   const [stats, setStats] = useState({ listingsCount: 0, notesCount: 0, requestsCount: 0, connectionsCount: 0, messagesCount: 0 });
   const [loading, setLoading] = useState(true);
@@ -69,6 +69,8 @@ export default function Profile() {
   const [avatarFailed, setAvatarFailed] = useState(false);
   const [imageProcessing, setImageProcessing] = useState(false);
   const [imageError, setImageError] = useState('');
+  const [passwordForm, setPasswordForm] = useState({ currentPassword: '', password: '', confirmPassword: '' });
+  const [passwordMessage, setPasswordMessage] = useState('');
 
   const avatarUrl = (profile.profilePicture || user?.profilePicture || '').trim();
   const hasUploadedAvatar = avatarUrl.startsWith('data:image/');
@@ -121,10 +123,21 @@ export default function Profile() {
       };
       const response = await authAPI.updateMe(payload);
       const updated = response.data.data;
-      const token = localStorage.getItem('token');
-      if (token) login(updated, token);
+      applyProfile({ ...user, ...updated });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const changePassword = async (event) => {
+    event.preventDefault();
+    setPasswordMessage('');
+    try {
+      await authAPI.updatePassword(passwordForm);
+      setPasswordForm({ currentPassword: '', password: '', confirmPassword: '' });
+      setPasswordMessage('Password updated. Sign in again on other devices.');
+    } catch (error) {
+      setPasswordMessage(error.userMessage || 'Could not update password.');
     }
   };
 
@@ -176,6 +189,7 @@ export default function Profile() {
                     </div>
                     <h2 className="text-feature-title mb-1">{displayName}</h2>
                     <p className="text-body-sm">{user?.email}</p>
+                    <p className="mt-2 text-xs text-slate-600">Role: {user?.role || 'student'} · Verification: {user?.verificationStatus || (user?.isVerifiedStudent ? 'verified' : 'legacy')}</p>
                     <div className="mt-4 text-xs inline-flex px-3 py-1 rounded-full bg-emerald-100 text-emerald-700">Trust Score: {user?.trustScore ?? 0}</div>
                   </div>
 
@@ -302,6 +316,19 @@ export default function Profile() {
                     />
 
                     <Button type="submit" variant="gradient" className="md:col-span-2">{saving ? 'Saving...' : 'Save Profile'}</Button>
+                  </form>
+                </PremiumCard>
+
+                <PremiumCard className="lg:col-span-3">
+                  <h2 className="text-xl font-bold mb-4">Change password</h2>
+                  {passwordMessage && <p role="status" className="mb-3 text-sm text-slate-700">{passwordMessage}</p>}
+                  <form onSubmit={changePassword} className="grid gap-3 sm:grid-cols-3">
+                    {[
+                      ['currentPassword', 'Current password', 'current-password'],
+                      ['password', 'New password (12+ characters)', 'new-password'],
+                      ['confirmPassword', 'Confirm new password', 'new-password']
+                    ].map(([field, label, autoComplete]) => <label key={field} className="text-sm font-medium">{label}<input type="password" autoComplete={autoComplete} minLength={field === 'currentPassword' ? undefined : 12} value={passwordForm[field]} onChange={(event) => setPasswordForm({ ...passwordForm, [field]: event.target.value })} required className="mt-1 w-full rounded-lg border px-3 py-2" /></label>)}
+                    <Button type="submit" variant="gradient" className="sm:col-span-3">Update password</Button>
                   </form>
                 </PremiumCard>
               </div>

@@ -11,15 +11,23 @@ export const authMiddleware = async (req, _res, next) => {
     if (!token) throw new Unauthorized('No token provided');
 
     const decoded = jwt.verify(token, env.jwtSecret);
-    const user = await User.findById(decoded.userId).select('_id email role isBlocked');
+    const user = await User.findById(decoded.userId).select('_id email role isBlocked accountType emailVerified verificationStatus accountStatus permissions tokenVersion');
 
     if (!user) throw new Unauthorized('User not found');
-    if (user.isBlocked) throw new Forbidden('Account is blocked by admin');
+    if (user.isBlocked || ['blocked', 'suspended'].includes(user.accountStatus)) throw new Forbidden('Account is unavailable');
+    if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== (user.tokenVersion || 0)) throw new Unauthorized('Session revoked');
+    if (user.accountStatus === 'pending') {
+      throw new Forbidden('Account verification is pending');
+    }
+    if (user.accountType === 'student' && user.emailVerified === false && user.verificationStatus !== 'verified') throw new Forbidden('Account verification is pending');
 
     req.user = {
       userId: user._id.toString(),
       email: user.email,
-      role: user.role || 'student'
+      role: user.role || 'student',
+      permissions: user.permissions || [],
+      emailVerified: user.emailVerified,
+      accountStatus: user.accountStatus || 'active'
     };
 
     next();
