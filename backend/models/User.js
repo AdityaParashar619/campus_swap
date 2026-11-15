@@ -12,6 +12,8 @@ const userSchema = new mongoose.Schema(
     branch: { type: String, default: '', trim: true },
     semester: { type: String, default: '', trim: true },
     graduationYear: { type: Number, min: 1950, max: 2200 },
+    institutionalYearCode: { type: String, match: /^[0-9]{2}$/ },
+    institutionalRollNumber: { type: String, match: /^[0-9]{3}$/ },
     company: { type: String, default: '', trim: true },
     jobTitle: { type: String, default: '', trim: true },
     emailVerified: { type: Boolean, default: false },
@@ -41,6 +43,7 @@ const userSchema = new mongoose.Schema(
     isBlocked: { type: Boolean, default: false },
     resetPasswordToken: { type: String, default: null },
     resetPasswordExpiresAt: { type: Date, default: null },
+    resetPasswordOtpVerifiedAt: { type: Date, default: null, select: false },
     savedListings: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Listing' }],
     bookmarkedNotes: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Note' }]
   },

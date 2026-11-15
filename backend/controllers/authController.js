@@ -2,14 +2,15 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { asyncHandler } from '../middleware/errorMiddleware.js';
 import { env } from '../config/env.js';
-import { BadRequest, Conflict, Forbidden, NotFound, Unauthorized } from '../utils/AppError.js';
-import { createOpaqueToken, createOtp, createResetToken, hashOtp, hashToken, signAuthToken, secureHashEquals } from '../utils/auth.js';
+import { BadRequest, Conflict, Forbidden, InternalError, NotFound, ServiceUnavailable, Unauthorized } from '../utils/AppError.js';
+import { createOpaqueToken, createOtp, hashOtp, hashToken, signAuthToken, secureHashEquals } from '../utils/auth.js';
 import { getPermissions } from '../utils/permissions.js';
 import EmailVerification from '../models/EmailVerification.js';
+import EnrollmentReservation from '../models/EnrollmentReservation.js';
 import RefreshSession from '../models/RefreshSession.js';
 import AlumniVerification from '../models/AlumniVerification.js';
 import AuditLog from '../models/AuditLog.js';
-import { sendPasswordReset, sendVerificationCode } from '../utils/emailProvider.js';
+import { sendPasswordChangedConfirmation, sendPasswordReset, sendPasswordResetCode, sendVerificationCode } from '../utils/emailProvider.js';
 import Connection from '../models/Connection.js';
 import Listing from '../models/Listing.js';
 import Message from '../models/Message.js';
@@ -17,6 +18,9 @@ import Note from '../models/Note.js';
 import RequestPost from '../models/RequestPost.js';
 import User from '../models/User.js';
 import { exposeContactForConnection } from '../utils/connections.js';
+import { consumeDevelopmentMail } from '../utils/devMailCapture.js';
+import { isPasswordStrong, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy.js';
+import { validateInstitutionalEmail } from '../utils/institutionalIdentity.js';
 
 const sanitizeUser = (user) => ({
   id: user._id,
@@ -51,19 +55,59 @@ const sanitizeUser = (user) => ({
   createdAt: user.createdAt
 });
 
-const passwordIsValid = (password) => typeof password === 'string' && password.length >= 12 && password.length <= 128;
+const passwordIsValid = isPasswordStrong;
 const normalizeEmail = (email) => String(email || '').trim().toLowerCase();
-export const validateCollegeEmail = (email, { allowedDomains = env.allowedCollegeDomains, production = env.nodeEnv === 'production' } = {}) => {
-  const domain = email.split('@')[1];
-  if (!allowedDomains.length) {
-    if (production) throw new Forbidden('Student registration is unavailable until the institution email domain is configured.');
-    return;
+
+export const validateCollegeEmail = (rawEmail, { allowedDomains = env.allowedCollegeDomains, emailPattern = env.institutionEmailPattern, production = env.nodeEnv === 'production' } = {}) => {
+  return validateInstitutionalEmail(rawEmail, { allowedDomains, emailPattern });
+};
+
+export const validateStudentIdentity = ({ email: rawEmail, enrollmentNumber: rawEnrollment, branch: rawBranch }, {
+  allowedDomains = env.allowedCollegeDomains,
+  emailPattern = env.institutionEmailPattern,
+  enrollmentPattern = env.enrollmentPattern,
+  allowedBranches = env.institutionBranches,
+  production = env.nodeEnv === 'production'
+} = {}) => {
+  const email = normalizeEmail(rawEmail);
+  const enrollmentNumber = String(rawEnrollment || '').trim().toLowerCase();
+  const branch = String(rawBranch || '').trim().toLowerCase();
+  const parsedEmail = validateInstitutionalEmail(email, { allowedDomains, emailPattern, allowedBranches });
+  if (!allowedBranches.includes(branch)) throw new BadRequest('Branch code is not allowed.');
+  if (parsedEmail.branchCode !== branch) throw new BadRequest('Branch code must match the institutional email address.');
+
+  const branchAlternation = [...allowedBranches]
+    .sort((left, right) => right.length - left.length)
+    .map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|');
+  const strictEnrollmentMatcher = new RegExp(`^0108(${branchAlternation})[0-9]{2}(10|11)[0-9]{2}$`);
+  const strictEnrollmentMatch = enrollmentNumber.match(strictEnrollmentMatcher);
+  if (!strictEnrollmentMatch) throw new BadRequest('Enrollment number does not match the required SATI format.');
+
+  let enrollmentMatcher;
+  try {
+    enrollmentMatcher = enrollmentPattern ? new RegExp(enrollmentPattern) : null;
+    if (enrollmentMatcher?.global || enrollmentMatcher?.sticky) throw new Error('stateful regex flags not permitted');
+  } catch {
+    throw new Error('ENROLLMENT_PATTERN must be a valid non-stateful regular expression');
   }
-  if (!allowedDomains.includes(domain)) throw new BadRequest('Use an approved college email address.');
+  if (enrollmentMatcher && !enrollmentMatcher.test(enrollmentNumber)) {
+    throw new BadRequest('Enrollment number does not match the required format.');
+  }
+  if (enrollmentMatcher) {
+    const enrollmentBranch = strictEnrollmentMatch[1];
+    if (enrollmentBranch && enrollmentBranch !== branch) throw new BadRequest('Enrollment branch code must match the registration branch.');
+  }
+  return { email, enrollmentNumber, branch, ...parsedEmail };
 };
 const validateInstitutionField = (value, allowed, field) => {
   if (allowed.length && !allowed.includes(value)) throw new BadRequest(`Invalid ${field}.`);
 };
+const registrationAcceptedMessage = () => env.emailProvider !== 'gmail' && env.nodeEnv === 'development' && env.otpMockEnabled
+  ? 'If registration details are eligible, a code is available in local mail capture.'
+  : env.emailProvider === 'resend' && env.resendTestMode
+    ? 'If registration details are eligible, a code was sent to the configured Resend test recipient.'
+    : 'If registration details are eligible, a verification code has been sent.';
 const setRefreshCookie = (res, token) => res.cookie('refreshToken', token, {
   httpOnly: true,
   secure: env.nodeEnv === 'production',
@@ -88,77 +132,208 @@ const issueSession = async (user, req, res, familyId = crypto.randomUUID(), pers
   return { token: accessToken, user: sanitizeUser(user) };
 };
 
-const registerStudentLogic = async (req, res, deliverCode, isDuplicate = (query) => User.exists(query), savePending = (filter, update, options) => EmailVerification.findOneAndUpdate(filter, update, options), removePending = (id) => EmailVerification.deleteOne({ _id: id }), domainPolicy = validateCollegeEmail, markSent = (id) => EmailVerification.updateOne({ _id: id }, { $set: { lastSentAt: new Date() } })) => {
+const reserveEnrollment = async (email, enrollmentNumber, expiresAt) => {
+  const now = new Date();
+  const currentEmailReservation = await EnrollmentReservation.findOne({ email, expiresAt: { $gt: now } });
+  if (currentEmailReservation) return currentEmailReservation.enrollmentNumber === enrollmentNumber ? currentEmailReservation : null;
+
+  try {
+    const reclaimed = await EnrollmentReservation.findOneAndUpdate(
+      { enrollmentNumber, expiresAt: { $lte: now } },
+      { $set: { email, expiresAt } },
+      { new: true }
+    );
+    if (reclaimed) return reclaimed;
+    return await EnrollmentReservation.findOneAndUpdate(
+      { email, $or: [{ expiresAt: { $lte: now } }, { expiresAt: null }] },
+      { $set: { enrollmentNumber, expiresAt } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+  } catch (error) {
+    if (error.code !== 11000) throw error;
+    const racedReservation = await EnrollmentReservation.findOne({ email, expiresAt: { $gt: new Date() } });
+    return racedReservation?.enrollmentNumber === enrollmentNumber ? racedReservation : null;
+  }
+};
+const releaseEnrollment = (email, enrollmentNumber) => EnrollmentReservation.deleteOne({ email, enrollmentNumber });
+const claimableStudentOtpFilter = (email) => ({
+  email,
+  kind: 'student',
+  $or: [
+    { lastSentAt: { $lte: new Date(Date.now() - env.otpResendCooldownSeconds * 1000) } },
+    { lastSentAt: null }
+  ]
+});
+
+const registerStudentLogic = async (req, res, deliverCode, isDuplicate = (query, collection) => collection === 'accountByEmail' ? User.findOne(query) : collection === 'accountByEnrollment' ? User.exists(query) : collection === 'pending' ? EmailVerification.exists(query) : collection === 'pendingEntry' ? EmailVerification.findOne(query) : User.exists(query), savePending = (filter, update, options) => EmailVerification.findOneAndUpdate(filter, update, options), removePending = (id) => EmailVerification.deleteOne({ _id: id }), reserve = reserveEnrollment, release = releaseEnrollment, generateCode = createOtp) => {
   const { name, email: rawEmail, enrollmentNumber, department, branch, semester, phoneNumber, password, confirmPassword, profilePicture, bio, skills, interests } = req.body;
   const email = normalizeEmail(rawEmail);
-  if (!name?.trim() || !/^\S+@\S+\.\S+$/.test(email) || !enrollmentNumber?.trim() || !department?.trim() || !branch?.trim() || !semester || !phoneNumber?.trim()) {
+  if (!/^\S+@\S+\.\S+$/.test(email)) {
+    throw new BadRequest('Enter a valid institutional email address.');
+  }
+  validateCollegeEmail(email);
+
+  const existingAccount = await isDuplicate({ email }, 'accountByEmail');
+  if (existingAccount) {
+    if (existingAccount.emailVerified === true) {
+      throw new Conflict('This email is already registered. Please log in.');
+    }
+
+    const resumableAccount = ['student', null, undefined].includes(existingAccount.accountType)
+      && ['active', 'pending', null, undefined].includes(existingAccount.accountStatus)
+      && existingAccount.verificationStatus !== 'rejected'
+      && existingAccount.isBlocked !== true;
+    if (!resumableAccount) {
+      throw new Conflict('This email is already associated with an account. Please log in or contact support.');
+    }
+
+    const pendingEntry = await isDuplicate({ email, kind: 'student' }, 'pendingEntry');
+    if (pendingEntry?.lastSentAt && Date.now() - pendingEntry.lastSentAt.getTime() < env.otpResendCooldownSeconds * 1000) {
+      return res.status(202).json({ success: true, message: 'Your account is awaiting email verification. Check your inbox for the current code.' });
+    }
+
+    const otp = generateCode();
+    const expiresAt = new Date(Date.now() + env.otpTtlMinutes * 60_000);
+    let entry;
+    try {
+      entry = await savePending(
+        claimableStudentOtpFilter(email),
+        { $set: { payload: { resumeUserId: existingAccount._id.toString() }, otpHash: hashOtp(email, otp, 'student-verification'), authorizationHash: null, expiresAt, attempts: 0, lastSentAt: new Date() } },
+        { upsert: true, new: true, setDefaultsOnInsert: true }
+      );
+    } catch (error) {
+      if (error.code === 11000) {
+        const racedAccount = await isDuplicate({ email }, 'accountByEmail');
+        if (racedAccount?.emailVerified === true) throw new Conflict('This email is already registered. Please log in.');
+        const racedEntry = await isDuplicate({ email, kind: 'student' }, 'pendingEntry');
+        if (racedEntry) return res.status(202).json({ success: true, message: 'Your account is awaiting email verification. Check your inbox for the current code.' });
+      }
+      throw error;
+    }
+    try {
+      const delivery = await deliverCode({ to: email, code: otp, requestId: req.requestId });
+      return res.status(202).json({ success: true, message: 'Your account is awaiting email verification. A code has been sent.', ...(delivery.previewToken ? { devMailPreviewToken: delivery.previewToken } : {}), expiresAt: entry.expiresAt });
+    } catch {
+      await removePending(entry._id);
+      throw new ServiceUnavailable('Email delivery is temporarily unavailable. Please retry later.');
+    }
+  }
+
+  if (!name?.trim() || !enrollmentNumber?.trim() || !department?.trim() || !branch?.trim() || !semester || !phoneNumber?.trim()) {
     throw new BadRequest('Complete all required student fields.');
   }
-  if (!passwordIsValid(password)) throw new BadRequest('Password must be 12 to 128 characters.');
+  if (!passwordIsValid(password)) throw new BadRequest(PASSWORD_POLICY_MESSAGE);
   if (password !== confirmPassword) throw new BadRequest('Passwords do not match.');
-  domainPolicy(email);
-  if (env.enrollmentPattern && !new RegExp(env.enrollmentPattern).test(enrollmentNumber)) throw new BadRequest('Enrollment number format is invalid.');
+  const identity = validateStudentIdentity({ email, enrollmentNumber, branch });
+  const emailBranch = identity.branchCode;
+  if (emailBranch && emailBranch !== identity.branch) throw new BadRequest('Branch code must match the institutional email address.');
   validateInstitutionField(department, env.institutionDepartments, 'department');
-  validateInstitutionField(branch, env.institutionBranches, 'branch');
+  validateInstitutionField(identity.branch, env.institutionBranches, 'branch');
   validateInstitutionField(String(semester), env.institutionSemesters, 'semester/year');
-  if (await isDuplicate({ $or: [{ email }, { enrollmentNumber: enrollmentNumber.trim() }] })) {
-    return res.status(202).json({ success: true, message: 'If registration details are eligible, a verification code has been sent.' });
-  }
+  if (await isDuplicate({ enrollmentNumber: identity.enrollmentNumber }, 'accountByEnrollment')) throw new Conflict('This enrollment number is already registered. Please log in.');
   const pendingEntry = await isDuplicate({ email, kind: 'student' }, 'pendingEntry');
-  if (pendingEntry?.lastSentAt && Date.now() - pendingEntry.lastSentAt.getTime() < 60_000) return res.status(202).json({ success: true, message: 'If registration details are eligible, a verification code has been sent.' });
-  const pendingEnrollment = await isDuplicate({ kind: 'student', 'payload.enrollmentNumber': enrollmentNumber.trim(), email: { $ne: email } }, 'pending');
-  if (pendingEnrollment) return res.status(202).json({ success: true, message: 'If registration details are eligible, a verification code has been sent.' });
+  if (pendingEntry?.lastSentAt && Date.now() - pendingEntry.lastSentAt.getTime() < env.otpResendCooldownSeconds * 1000) return res.status(202).json({ success: true, message: registrationAcceptedMessage() });
+  const pendingEnrollment = await isDuplicate({ kind: 'student', 'payload.enrollmentNumber': identity.enrollmentNumber, email: { $ne: email }, expiresAt: { $gt: new Date() } }, 'pending');
+  if (pendingEnrollment) return res.status(202).json({ success: true, message: registrationAcceptedMessage() });
 
-  const otp = createOtp();
+  const otp = generateCode();
   const payload = {
-    name: name.trim(), email, enrollmentNumber: enrollmentNumber.trim(), department: department.trim(), branch: branch.trim(),
+    name: name.trim(), email: identity.email, enrollmentNumber: identity.enrollmentNumber, department: department.trim(), branch: identity.branch,
     semester: String(semester), yearSemester: String(semester), phoneNumber: phoneNumber.trim(),
+    institutionalYearCode: identity.graduationYearCode, institutionalRollNumber: identity.emailRollNumber,
     password: await bcrypt.hash(password, 12), profilePicture: profilePicture || '', bio: bio || '', skills: skills || [], interests: interests || []
   };
-  const entry = await savePending(
-    { email, kind: 'student' },
-    { $set: { payload, otpHash: hashOtp(email, otp), expiresAt: new Date(Date.now() + 10 * 60_000), attempts: 0, lastSentAt: null } },
-    { upsert: true, new: true, setDefaultsOnInsert: true }
-  );
+  const expiresAt = new Date(Date.now() + env.otpTtlMinutes * 60_000);
+  let reservation;
   try {
-    const delivery = await deliverCode({ to: email, code: otp });
-    await markSent(entry._id);
-    res.status(202).json({ success: true, message: 'If registration details are eligible, a verification code has been sent.', ...(delivery.previewCode ? { devOtp: delivery.previewCode } : {}), expiresAt: entry.expiresAt });
+    reservation = await reserve(email, identity.enrollmentNumber, expiresAt);
   } catch (error) {
-    await removePending(entry._id);
-    throw new BadRequest('Email delivery is not configured. Contact the institution administrator.');
+    if (error.code !== 11000) throw error;
   }
+  if (!reservation) return res.status(202).json({ success: true, message: registrationAcceptedMessage() });
+
+  let entry;
+  try {
+    entry = await savePending(
+      claimableStudentOtpFilter(email),
+      { $set: { payload, otpHash: hashOtp(email, otp, 'student-verification'), authorizationHash: null, expiresAt, attempts: 0, lastSentAt: new Date() } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+  } catch (error) {
+    if (error.code === 11000) {
+      const racedAccount = await isDuplicate({ email }, 'accountByEmail');
+      if (racedAccount?.emailVerified === true) throw new Conflict('This email is already registered. Please log in.');
+      const racedEntry = await isDuplicate({ email, kind: 'student' }, 'pendingEntry');
+      if (racedEntry) return res.status(202).json({ success: true, message: registrationAcceptedMessage(), expiresAt: racedEntry.expiresAt });
+    }
+    await release(email, identity.enrollmentNumber);
+    throw error;
+  }
+  let delivery;
+  try {
+    delivery = await deliverCode({ to: email, code: otp, requestId: req.requestId });
+  } catch (error) {
+    await Promise.all([removePending(entry._id), release(email, identity.enrollmentNumber)]);
+    throw new ServiceUnavailable('Email delivery is temporarily unavailable. Please retry later.');
+  }
+  res.status(202).json({ success: true, message: registrationAcceptedMessage(), ...(delivery.previewToken ? { devMailPreviewToken: delivery.previewToken } : {}), expiresAt: entry.expiresAt });
 };
 
 export const registerStudent = asyncHandler((req, res) => registerStudentLogic(req, res, sendVerificationCode));
-export const createRegisterStudentHandler = ({ deliverCode = sendVerificationCode, isDuplicate = (query, collection) => collection === 'pending' ? EmailVerification.exists(query) : collection === 'pendingEntry' ? EmailVerification.findOne(query) : User.exists(query), savePending = (filter, update, options) => EmailVerification.findOneAndUpdate(filter, update, options), removePending = (id) => EmailVerification.deleteOne({ _id: id }), domainPolicy = (email) => validateCollegeEmail(email, { allowedDomains: [], production: false }), markSent = (id) => EmailVerification.updateOne({ _id: id }, { $set: { lastSentAt: new Date() } }) } = {}) => (req, res) => registerStudentLogic(req, res, deliverCode, isDuplicate, savePending, removePending, domainPolicy, markSent);
+export const createRegisterStudentHandler = ({ deliverCode = sendVerificationCode, generateCode = createOtp, isDuplicate = (query, collection) => collection === 'accountByEmail' ? User.findOne(query) : collection === 'accountByEnrollment' ? User.exists(query) : collection === 'pending' ? EmailVerification.exists(query) : collection === 'pendingEntry' ? EmailVerification.findOne(query) : User.exists(query), savePending = (filter, update, options) => EmailVerification.findOneAndUpdate(filter, update, options), removePending = (id) => EmailVerification.deleteOne({ _id: id }), reserveEnrollment: reserve = reserveEnrollment, releaseEnrollment: release = releaseEnrollment } = {}) => (req, res) => registerStudentLogic(req, res, deliverCode, isDuplicate, savePending, removePending, reserve, release, generateCode);
 
 export const verifyStudentEmail = asyncHandler(async (req, res) => {
   const email = normalizeEmail(req.body.email);
   const otp = String(req.body.otp || '').trim();
-  const otpHash = hashOtp(email, otp);
-  const entry = await EmailVerification.findOne({ email, kind: 'student', expiresAt: { $gt: new Date() }, attempts: { $lt: 5 } });
+  const otpHash = hashOtp(email, otp, 'student-verification');
+  const entry = await EmailVerification.findOne({ email, kind: 'student', expiresAt: { $gt: new Date() }, attempts: { $lt: env.otpMaxAttempts } });
+  const resumingExistingAccount = Boolean(entry?.payload?.resumeUserId);
+  const reservation = entry && !resumingExistingAccount && await EnrollmentReservation.findOne({ email, enrollmentNumber: entry.payload.enrollmentNumber, expiresAt: { $gt: new Date() } });
+  if (entry && !resumingExistingAccount && !reservation) {
+    let claimedReservation;
+    try {
+      claimedReservation = await reserveEnrollment(email, entry.payload.enrollmentNumber, entry.expiresAt);
+    } catch (error) {
+      if (error.code !== 11000) throw error;
+    }
+    if (!claimedReservation) throw new BadRequest('Invalid or expired verification code.');
+  }
   const valid = entry && secureHashEquals(entry.otpHash, otpHash);
   const claimed = valid ? await EmailVerification.findOneAndUpdate(
-    { _id: entry._id, otpHash, expiresAt: { $gt: new Date() }, attempts: { $lt: 5 } },
-    { $set: { attempts: 5 } },
+    { _id: entry._id, otpHash, expiresAt: { $gt: new Date() }, attempts: { $lt: env.otpMaxAttempts } },
+    { $set: { attempts: env.otpMaxAttempts } },
     { new: false }
   ) : null;
   if (!claimed) {
-    await EmailVerification.updateOne({ email, kind: 'student', attempts: { $lt: 5 }, expiresAt: { $gt: new Date() } }, { $inc: { attempts: 1 } });
+    await EmailVerification.updateOne({ email, kind: 'student', attempts: { $lt: env.otpMaxAttempts }, expiresAt: { $gt: new Date() } }, { $inc: { attempts: 1 } });
     throw new BadRequest('Invalid or expired verification code.');
   }
   let user;
-  try {
-    user = await User.create({ ...claimed.payload, accountType: 'student', role: 'student', emailVerified: true, verificationStatus: 'verified', verificationMethod: 'college_email_otp', accountStatus: 'active', isVerifiedStudent: true });
-  } catch (error) {
-    if (error.code === 11000) {
+  if (resumingExistingAccount) {
+    user = await User.findOneAndUpdate(
+      { _id: claimed.payload.resumeUserId, email, accountType: { $in: ['student', null] }, emailVerified: { $ne: true }, accountStatus: { $in: ['active', 'pending', null] }, isBlocked: { $ne: true } },
+      { $set: { emailVerified: true, verificationStatus: 'verified', verificationMethod: 'college_email_otp', accountStatus: 'active', isVerifiedStudent: true } },
+      { new: true }
+    );
+    if (!user) {
       await EmailVerification.deleteOne({ _id: claimed._id });
-      throw new Conflict('Email or enrollment number already exists.');
+      throw new BadRequest('Invalid or expired verification code.');
     }
-    throw error;
+  } else {
+    try {
+      user = await User.create({ ...claimed.payload, accountType: 'student', role: 'student', emailVerified: true, verificationStatus: 'verified', verificationMethod: 'college_email_otp', accountStatus: 'active', isVerifiedStudent: true });
+    } catch (error) {
+      if (error.code === 11000) {
+        await Promise.all([EmailVerification.deleteOne({ _id: claimed._id }), releaseEnrollment(email, claimed.payload.enrollmentNumber)]);
+        throw new Conflict('Email or enrollment number already exists.');
+      }
+      throw error;
+    }
   }
-  await EmailVerification.deleteOne({ _id: claimed._id, attempts: 5 });
+  await Promise.all([
+    EmailVerification.deleteOne({ _id: claimed._id, attempts: env.otpMaxAttempts }),
+    ...(resumingExistingAccount ? [] : [releaseEnrollment(email, claimed.payload.enrollmentNumber)])
+  ]);
   const session = await issueSession(user, req, res);
   res.status(201).json({ success: true, message: 'Email verified.', ...session });
 });
@@ -166,37 +341,38 @@ export const verifyStudentEmail = asyncHandler(async (req, res) => {
 export const resendStudentOtp = asyncHandler(async (req, res) => {
   const email = normalizeEmail(req.body.email);
   const entry = await EmailVerification.findOne({ email, kind: 'student' });
-  if (!entry) return res.json({ success: true, message: 'If a pending registration exists, a new code has been sent.' });
-  if (entry.lastSentAt && Date.now() - entry.lastSentAt.getTime() < 60_000) throw new BadRequest('Please wait before requesting another code.');
+  if (!entry) return res.json({ success: true, message: env.emailProvider === 'resend' && env.resendTestMode ? 'If a pending registration exists, a code was sent to the configured Resend test recipient.' : 'If a pending registration exists, a new code has been sent.' });
+  if (entry.lastSentAt && Date.now() - entry.lastSentAt.getTime() < env.otpResendCooldownSeconds * 1000) throw new BadRequest('Please wait before requesting another code.');
   const otp = createOtp();
   const oldState = { otpHash: entry.otpHash, expiresAt: entry.expiresAt, attempts: entry.attempts, lastSentAt: entry.lastSentAt };
-  entry.otpHash = hashOtp(email, otp);
-  entry.expiresAt = new Date(Date.now() + 10 * 60_000);
+  entry.otpHash = hashOtp(email, otp, 'student-verification');
+  entry.expiresAt = new Date(Date.now() + env.otpTtlMinutes * 60_000);
   entry.attempts = 0;
   await entry.save();
   let delivery;
   try {
-    delivery = await sendVerificationCode({ to: email, code: otp });
+    delivery = await sendVerificationCode({ to: email, code: otp, requestId: req.requestId });
   } catch (error) {
     Object.assign(entry, oldState);
     await entry.save();
-    throw new BadRequest('Email delivery is temporarily unavailable. Please retry later.');
+    throw new ServiceUnavailable('Email delivery is temporarily unavailable. Please retry later.');
   }
   entry.lastSentAt = new Date();
   await entry.save();
-  res.json({ success: true, message: 'If a pending registration exists, a new code has been sent.', ...(delivery.previewCode ? { devOtp: delivery.previewCode } : {}) });
+  const message = env.emailProvider === 'resend' && env.resendTestMode ? 'If a pending registration exists, a code was sent to the configured Resend test recipient.' : 'If a pending registration exists, a new code has been sent.';
+  res.json({ success: true, message, ...(delivery.previewToken ? { devMailPreviewToken: delivery.previewToken } : {}) });
 });
 
 export const registerAlumni = asyncHandler(async (req, res) => {
   const { name, email: rawEmail, graduationYear, department, branch, previousEnrollmentNumber = '', company = '', jobTitle = '', password, confirmPassword } = req.body;
   const email = normalizeEmail(rawEmail);
   if (!name?.trim() || !/^\S+@\S+\.\S+$/.test(email) || !Number.isInteger(Number(graduationYear)) || !department?.trim() || !branch?.trim()) throw new BadRequest('Complete all required alumni fields.');
-  if (!passwordIsValid(password) || password !== confirmPassword) throw new BadRequest('Use a 12 to 128 character password and confirm it correctly.');
+  if (!passwordIsValid(password) || password !== confirmPassword) throw new BadRequest(`${PASSWORD_POLICY_MESSAGE} Passwords must match.`);
   if (await User.exists({ email })) return res.status(202).json({ success: true, message: 'If this address is eligible, verification instructions have been sent.' });
   const existingApplication = await AlumniVerification.findOne({ email });
   if (existingApplication) {
     if (existingApplication.status !== 'email_pending') return res.status(202).json({ success: true, message: 'If this address is eligible, verification instructions have been sent.' });
-    if (existingApplication.emailLastSentAt && Date.now() - existingApplication.emailLastSentAt.getTime() < 60_000) return res.status(202).json({ success: true, message: 'If this address is eligible, verification instructions have been sent.' });
+    if (existingApplication.emailLastSentAt && Date.now() - existingApplication.emailLastSentAt.getTime() < env.otpResendCooldownSeconds * 1000) return res.status(202).json({ success: true, message: 'If this address is eligible, verification instructions have been sent.' });
   }
   const rawVerificationToken = createOpaqueToken();
   const payload = { name: name.trim(), email, password: await bcrypt.hash(password, 12), graduationYear: Number(graduationYear), department, branch, previousEnrollmentNumber, company, jobTitle };
@@ -204,7 +380,7 @@ export const registerAlumni = asyncHandler(async (req, res) => {
   try {
     verification = await AlumniVerification.findOneAndUpdate(
       existingApplication
-        ? { email, status: 'email_pending', emailLastSentAt: { $lte: new Date(Date.now() - 60_000) } }
+        ? { email, status: 'email_pending', emailLastSentAt: { $lte: new Date(Date.now() - env.otpResendCooldownSeconds * 1000) } }
         : { email },
       { $set: { email, payload, emailTokenHash: hashToken(rawVerificationToken), emailTokenExpiresAt: new Date(Date.now() + 24 * 60 * 60_000), emailLastSentAt: new Date(), status: 'email_pending', graduationYear: Number(graduationYear), department, branch, previousEnrollmentNumber, company, jobTitle } },
       { upsert: !existingApplication, new: true, setDefaultsOnInsert: true }
@@ -214,17 +390,20 @@ export const registerAlumni = asyncHandler(async (req, res) => {
     throw error;
   }
   if (!verification) return res.status(202).json({ success: true, message: 'If this address is eligible, verification instructions have been sent.' });
+  let delivery;
   try {
-    await sendPasswordReset({ to: email, resetUrl: `${env.frontendUrl.split(',')[0]}/verify-alumni?email=${encodeURIComponent(email)}&token=${encodeURIComponent(rawVerificationToken)}`, template: 'campusswap-alumni-email-verification' });
+    const frontendOrigin = env.frontendUrl.split(',')[0].replace(/\/$/, '');
+    const verificationUrl = `${frontendOrigin}/verify-alumni?email=${encodeURIComponent(email)}#token=${encodeURIComponent(rawVerificationToken)}`;
+    delivery = await sendPasswordReset({ to: email, resetUrl: verificationUrl, template: 'campusswap-alumni-email-verification', requestId: req.requestId });
   } catch (error) {
     if (existingApplication) {
       await AlumniVerification.updateOne({ _id: verification._id, emailTokenHash: hashToken(rawVerificationToken) }, { $set: { emailTokenHash: null, emailTokenExpiresAt: null, emailLastSentAt: existingApplication.emailLastSentAt || null, payload: existingApplication.payload || null } });
     } else {
       await AlumniVerification.deleteOne({ _id: verification._id, emailTokenHash: hashToken(rawVerificationToken) });
     }
-    throw new BadRequest('Email delivery is not configured. Contact the institution administrator.');
+    throw new BadRequest('Email delivery is temporarily unavailable. Please retry later.');
   }
-  res.status(202).json({ success: true, message: 'Alumni verification request submitted for institutional review.', verificationStatus: 'pending' });
+  res.status(202).json({ success: true, message: 'Alumni verification request submitted for institutional review.', verificationStatus: 'pending', ...(delivery.previewToken ? { devMailPreviewToken: delivery.previewToken } : {}) });
 });
 
 export const verifyAlumniEmail = asyncHandler(async (req, res) => {
@@ -290,7 +469,7 @@ export const updatePassword = asyncHandler(async (req, res) => {
   const { currentPassword, password, confirmPassword } = req.body;
   const user = await User.findById(req.user.userId);
   if (!user || !(await bcrypt.compare(currentPassword || '', user.password))) throw new Unauthorized('Current password is incorrect.');
-  if (!passwordIsValid(password) || password !== confirmPassword) throw new BadRequest('New password must be 12 to 128 characters and confirmed.');
+  if (!passwordIsValid(password) || password !== confirmPassword) throw new BadRequest(`${PASSWORD_POLICY_MESSAGE} Passwords must match.`);
   user.password = await bcrypt.hash(password, 12);
   user.tokenVersion = (user.tokenVersion || 0) + 1;
   await user.save();
@@ -302,7 +481,7 @@ const loginLogic = async (req, res, createSession, findUser = (email) => User.fi
   const { email, password } = req.body;
   if (!email || !password) throw new BadRequest('Email and password required');
 
-  const user = await findUser(email.toLowerCase());
+  const user = await findUser(normalizeEmail(email));
   if (!user) throw new Unauthorized('Invalid credentials');
 
   if (user.isBlocked || ['blocked', 'suspended', 'pending'].includes(user.accountStatus)) throw new Unauthorized('Invalid credentials');
@@ -311,47 +490,149 @@ const loginLogic = async (req, res, createSession, findUser = (email) => User.fi
   if (!isMatch) throw new Unauthorized('Invalid credentials');
 
   if (user.emailVerified === false) throw new Unauthorized('Invalid credentials');
-  const session = createSession ? await createSession(user, req, res) : await issueSession(user, req, res);
+  let session;
+  try {
+    session = createSession ? await createSession(user, req, res) : await issueSession(user, req, res);
+  } catch (error) {
+    const details = error && typeof error === 'object'
+      ? { type: error.constructor?.name || 'Object', name: typeof error.name === 'string' ? error.name : undefined, code: typeof error.code === 'string' || typeof error.code === 'number' ? error.code : undefined }
+      : { type: typeof error };
+    console.error(`[${req.requestId || 'n/a'}] Login session creation failed`, details);
+    throw new InternalError('Unable to start a session. Please retry.');
+  }
   res.json({ success: true, message: 'Login successful', ...session });
 };
 
-export const login = asyncHandler(loginLogic);
+// Do not pass Express `next` into loginLogic's optional third createSession
+// argument. The previous direct wrapper called next(user, req, res), causing
+// error middleware to send 500 before loginLogic attempted its success JSON.
+export const login = asyncHandler((req, res) => loginLogic(req, res));
 export const createLoginHandler = ({ createSession, findUser = (email) => User.findOne({ email }) } = {}) => (req, res, next) => loginLogic(req, res, createSession, findUser).catch(next);
 
-export const forgotPassword = asyncHandler(async (req, res) => {
-  const { email } = req.body;
+export const createForgotPasswordHandler = ({
+  deliverCode = sendPasswordResetCode,
+  generateCode = createOtp,
+  findAccount = (email) => User.findOne({ email, emailVerified: { $ne: false }, accountStatus: { $in: ['active', null] } }),
+  findPending = (email) => EmailVerification.findOne({ email, kind: 'password_reset' }),
+  savePending = (email, update) => EmailVerification.findOneAndUpdate(
+    { email, kind: 'password_reset' }, update, { upsert: true, new: true, setDefaultsOnInsert: true }
+  ),
+  removePending = (id, otpHash) => EmailVerification.deleteOne({ _id: id, otpHash })
+} = {}) => asyncHandler(async (req, res) => {
+  const email = normalizeEmail(req.body.email);
   if (!email) throw new BadRequest('Email is required');
-
-  const user = await User.findOne({ email: email.toLowerCase() });
+  const user = await findAccount(email);
+  let devMailPreviewToken;
   if (user) {
-    const { rawToken, hashedToken, expiresAt } = createResetToken();
-    user.resetPasswordToken = hashedToken;
-    user.resetPasswordExpiresAt = new Date(expiresAt);
-    await user.save();
+    const existing = await findPending(email);
+    if (existing?.lastSentAt && Date.now() - existing.lastSentAt.getTime() < env.otpResendCooldownSeconds * 1000) {
+      return res.json({ success: true, message: 'If this address is eligible, password reset instructions can be requested.' });
+    }
+    const otp = generateCode();
+    const otpHash = hashOtp(email, otp, 'password-reset');
+    const expiresAt = new Date(Date.now() + env.otpTtlMinutes * 60_000);
+    const entry = await savePending(email, { $set: { payload: { userId: user._id.toString() }, otpHash, authorizationHash: null, expiresAt, attempts: 0, lastSentAt: new Date() } });
     try {
-      const delivery = await sendPasswordReset({ to: user.email, resetUrl: `${env.frontendUrl.split(',')[0]}/reset-password?token=${rawToken}` });
-      void delivery;
-    } catch (error) {
-      console.error(`Password reset delivery failed for request ${req.requestId}: ${error.message}`);
+      const delivery = await deliverCode({ to: normalizeEmail(user.email), code: otp, requestId: req.requestId });
+      devMailPreviewToken = delivery.previewToken;
+    } catch {
+      try {
+        await removePending(entry._id, otpHash);
+      } catch {
+        console.warn(JSON.stringify({ event: 'password_reset_otp_cleanup_failed', provider: env.emailProvider, ...(req.requestId ? { requestId: req.requestId } : {}) }));
+      }
     }
   }
-  res.json({ success: true, message: 'If this email exists, reset instructions have been sent.' });
+  res.json({ success: true, message: 'If this address is eligible, password reset instructions can be requested.', ...(devMailPreviewToken ? { devMailPreviewToken } : {}) });
+});
+
+export const forgotPassword = createForgotPasswordHandler();
+
+const logPasswordResetOtpDiagnostic = (req, fields) => {
+  console.info(JSON.stringify({
+    event: 'password_reset_otp_verification',
+    ...(req.requestId ? { requestId: req.requestId } : {}),
+    ...fields
+  }));
+};
+
+export const verifyPasswordResetOtp = asyncHandler(async (req, res) => {
+  const email = normalizeEmail(req.body.email);
+  const otp = String(req.body.otp || '').trim();
+  const otpHash = hashOtp(email, otp, 'password-reset');
+  const entry = await EmailVerification.findOne({ email, kind: 'password_reset', otpHash: { $ne: null } });
+  const now = new Date();
+  const purposeMatched = Boolean(entry && entry.kind === 'password_reset');
+  const expiryValid = Boolean(entry && entry.expiresAt > now);
+  const attemptsAllowed = Boolean(entry && entry.attempts < env.otpMaxAttempts);
+  const hashMatched = Boolean(entry && secureHashEquals(entry.otpHash, otpHash));
+  logPasswordResetOtpDiagnostic(req, {
+    stage: 'record_validation',
+    recordFound: Boolean(entry),
+    purposeMatched,
+    expiryValid,
+    attemptsAllowed,
+    hashMatched
+  });
+  if (!entry || !purposeMatched || !expiryValid || !attemptsAllowed || !hashMatched) {
+    await EmailVerification.updateOne({ email, kind: 'password_reset', otpHash: { $ne: null }, attempts: { $lt: env.otpMaxAttempts }, expiresAt: { $gt: new Date() } }, { $inc: { attempts: 1 } });
+    logPasswordResetOtpDiagnostic(req, { stage: 'record_rejected', consumed: false });
+    throw new BadRequest('Invalid or expired verification code.');
+  }
+  const authorization = createOpaqueToken();
+  const consumed = await EmailVerification.findOneAndUpdate(
+    { _id: entry._id, otpHash, expiresAt: { $gt: new Date() }, attempts: { $lt: env.otpMaxAttempts } },
+    { $set: { otpHash: null, authorizationHash: hashToken(authorization), expiresAt: new Date(Date.now() + 10 * 60_000), attempts: env.otpMaxAttempts } },
+    { new: false }
+  );
+  if (!consumed) {
+    logPasswordResetOtpDiagnostic(req, { stage: 'consume', consumed: false });
+    throw new BadRequest('Invalid or expired verification code.');
+  }
+  logPasswordResetOtpDiagnostic(req, { stage: 'consume', consumed: true });
+  const user = await User.findOneAndUpdate(
+    { _id: entry.payload.userId, emailVerified: { $ne: false }, accountStatus: { $in: ['active', null] } },
+    { $set: { resetPasswordToken: hashToken(authorization), resetPasswordExpiresAt: new Date(Date.now() + 10 * 60_000), resetPasswordOtpVerifiedAt: new Date() } },
+    { new: true }
+  );
+  if (!user) {
+    await EmailVerification.deleteOne({ _id: entry._id });
+    logPasswordResetOtpDiagnostic(req, { stage: 'authorization', accountEligible: false, consumed: true });
+    throw new BadRequest('Invalid or expired verification code.');
+  }
+  await EmailVerification.deleteOne({ _id: entry._id, authorizationHash: hashToken(authorization) });
+  logPasswordResetOtpDiagnostic(req, { stage: 'authorization', accountEligible: true, consumed: true });
+  res.set('Cache-Control', 'no-store');
+  res.json({ success: true, resetAuthorization: authorization, expiresInSeconds: 600 });
+});
+
+export const previewDevelopmentMail = asyncHandler(async (req, res) => {
+  const captured = consumeDevelopmentMail(req.body?.previewToken);
+  if (!captured) throw new BadRequest('Development mail preview is invalid, expired, or already used.');
+  res.set('Cache-Control', 'no-store');
+  res.json({ success: true, ...captured });
 });
 
 export const resetPassword = asyncHandler(async (req, res) => {
   const { token, password } = req.body;
   if (!token || !password) throw new BadRequest('Token and new password are required');
-  if (!passwordIsValid(password)) throw new BadRequest('Password must be 12 to 128 characters.');
+  if (!passwordIsValid(password)) throw new BadRequest(PASSWORD_POLICY_MESSAGE);
 
   const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
   const passwordHash = await bcrypt.hash(password, 12);
   const user = await User.findOneAndUpdate(
-    { resetPasswordToken: hashedToken, resetPasswordExpiresAt: { $gt: new Date() } },
-    { $set: { password: passwordHash, resetPasswordToken: null, resetPasswordExpiresAt: null }, $inc: { tokenVersion: 1 } },
+    { resetPasswordToken: hashedToken, resetPasswordExpiresAt: { $gt: new Date() }, resetPasswordOtpVerifiedAt: { $gt: new Date(Date.now() - 10 * 60_000) } },
+    { $set: { password: passwordHash, resetPasswordToken: null, resetPasswordExpiresAt: null, resetPasswordOtpVerifiedAt: null }, $inc: { tokenVersion: 1 } },
     { new: true }
   );
   if (!user) throw new BadRequest('Invalid or expired reset token');
   await RefreshSession.updateMany({ user: user._id, revokedAt: null }, { $set: { revokedAt: new Date() } });
+
+  try {
+    await sendPasswordChangedConfirmation({ to: user.email, requestId: req.requestId });
+  } catch (error) {
+    console.error(`[${req.requestId || 'n/a'}] Password change confirmation delivery failed`, { type: error?.constructor?.name || typeof error, status: Number.isInteger(error?.status) ? error.status : undefined });
+  }
 
   res.json({ success: true, message: 'Password reset successful' });
 });

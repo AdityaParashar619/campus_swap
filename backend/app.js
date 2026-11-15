@@ -32,6 +32,7 @@ export const corsOptions = {
 
 export const createApp = ({ databaseMiddleware = requireDatabase } = {}) => {
   const app = express();
+  app.set('trust proxy', env.trustProxyHops);
 
   app.use(cors(corsOptions));
   app.use(express.json({ limit: '2mb' }));

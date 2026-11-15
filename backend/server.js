@@ -1,29 +1,20 @@
 import { createServer } from 'http';
 import { pathToFileURL } from 'url';
 import mongoose from 'mongoose';
-import jwt from 'jsonwebtoken';
 import { Server } from 'socket.io';
 import { createApp, corsOptions } from './app.js';
-import { connectDB } from './config/db.js';
+import { connectDB, isDatabaseReady } from './config/db.js';
 import { env } from './config/env.js';
 import { ensureAdminUser } from './scripts/ensureAdmin.js';
 import { seedDatabase } from './scripts/seed.js';
 import User from './models/User.js';
+import { socketAuthMiddleware } from './middleware/socketAuthMiddleware.js';
+import { verifyEmailProviderConnection } from './utils/emailProvider.js';
 
 export const app = createApp();
 export const httpServer = createServer(app);
 const io = new Server(httpServer, { cors: corsOptions });
-io.use(async (socket, next) => {
-  try {
-    const decoded = jwt.verify(socket.handshake.auth?.token || '', env.jwtSecret);
-    const user = await User.findById(decoded.userId).select('_id accountStatus isBlocked tokenVersion emailVerified');
-    if (!user || user.isBlocked || ['pending', 'suspended', 'blocked'].includes(user.accountStatus) || (decoded.tokenVersion || 0) !== (user.tokenVersion || 0)) return next(new Error('Unauthorized'));
-    socket.data.userId = user._id.toString();
-    next();
-  } catch {
-    next(new Error('Unauthorized'));
-  }
-});
+io.use(socketAuthMiddleware);
 io.engine.on('connection_error', (error) => {
   console.error(`Socket.IO connection failed: ${error.message}`);
 });
@@ -44,8 +35,8 @@ io.on('connection', (socket) => {
 });
 
 let connecting = false;
-const connectDatabaseInBackground = async () => {
-  if (connecting) return;
+export const connectDatabaseInBackground = async () => {
+  if (connecting || isDatabaseReady()) return;
   connecting = true;
 
   try {
@@ -60,6 +51,9 @@ const connectDatabaseInBackground = async () => {
 };
 
 export const startServer = () => {
+  if (env.emailProvider === 'gmail') {
+    void verifyEmailProviderConnection().catch(() => console.error('Gmail SMTP connection verification failed; email delivery will remain unavailable until configuration is corrected.'));
+  }
   httpServer.on('error', (error) => {
     console.error(`HTTP server failed: ${error.message}`);
     process.exitCode = 1;

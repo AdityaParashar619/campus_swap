@@ -26,7 +26,7 @@ export const getChatAccess = async (userId, otherUserId) => {
   };
 };
 
-export const exposeContactForConnection = (student, isConnected) => {
+export const serializePublicProfile = (student, { isConnected = false } = {}) => {
   const data = student.toObject ? student.toObject() : { ...student };
   if (!isConnected || data.contactVisibility !== 'connections') {
     delete data.email;
@@ -35,3 +35,6 @@ export const exposeContactForConnection = (student, isConnected) => {
   }
   return data;
 };
+
+export const exposeContactForConnection = (student, isConnected) =>
+  serializePublicProfile(student, { isConnected });

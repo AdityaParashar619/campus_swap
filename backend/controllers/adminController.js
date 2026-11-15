@@ -2,8 +2,9 @@ import { asyncHandler } from '../middleware/errorMiddleware.js';
 import Listing from '../models/Listing.js';
 import Report from '../models/Report.js';
 import User from '../models/User.js';
-import { BadRequest, NotFound } from '../utils/AppError.js';
+import { BadRequest, Forbidden, NotFound } from '../utils/AppError.js';
 import RefreshSession from '../models/RefreshSession.js';
+import { hasPermission } from '../utils/permissions.js';
 
 export const getAdminOverview = asyncHandler(async (_req, res) => {
   const [users, listings, reportsOpen, reportsTotal] = await Promise.all([
@@ -57,11 +58,22 @@ export const takeReportAction = asyncHandler(async (req, res) => {
 
   if (action === 'block_user') {
     if (!report.targetUser) throw new BadRequest('Report has no target user to block');
-    await User.findByIdAndUpdate(report.targetUser, { isBlocked: true });
+    if (!hasPermission(req.user, 'users:block')) throw new Forbidden('Insufficient permissions to block users.');
+    const target = await User.findById(report.targetUser);
+    if (!target) throw new NotFound('Report target user not found');
+    if (['admin', 'college_admin', 'super_admin'].includes(target.role) && req.user.role !== 'super_admin') {
+      throw new Forbidden('Only a super administrator can block this account.');
+    }
+    target.isBlocked = true;
+    target.accountStatus = 'blocked';
+    target.tokenVersion = (target.tokenVersion || 0) + 1;
+    await target.save();
+    await RefreshSession.updateMany({ user: target._id, revokedAt: null }, { $set: { revokedAt: new Date() } });
     report.actionTaken = 'user_blocked';
     report.status = 'resolved';
   } else if (action === 'hide_listing') {
     if (report.targetType !== 'listing') throw new BadRequest('Report target is not a listing');
+    if (!hasPermission(req.user, 'marketplace:moderate')) throw new Forbidden('Insufficient permissions to moderate listings.');
     await Listing.findByIdAndUpdate(report.targetId, { isHidden: true });
     report.actionTaken = 'listing_hidden';
     report.status = 'resolved';
@@ -95,11 +107,16 @@ export const listUsers = asyncHandler(async (_req, res) => {
 
 export const setUserBlockStatus = asyncHandler(async (req, res) => {
   const { isBlocked } = req.body;
-  const user = await User.findById(req.params.id).select('name email isBlocked accountStatus tokenVersion');
+  if (typeof isBlocked !== 'boolean') throw new BadRequest('isBlocked must be a boolean.');
+  if (String(req.params.id) === req.user.userId) throw new Forbidden('You cannot change your own account status.');
+  const user = await User.findById(req.params.id).select('name email role isBlocked accountStatus tokenVersion');
 
   if (!user) throw new NotFound('User not found');
+  if (['admin', 'college_admin', 'super_admin'].includes(user.role) && req.user.role !== 'super_admin') {
+    throw new Forbidden('Only a super administrator can modify this account.');
+  }
 
-  user.isBlocked = Boolean(isBlocked);
+  user.isBlocked = isBlocked;
   user.accountStatus = user.isBlocked ? 'blocked' : 'active';
   user.tokenVersion = (user.tokenVersion || 0) + 1;
   await user.save();
@@ -115,7 +132,8 @@ export const listListings = asyncHandler(async (_req, res) => {
 
 export const setListingHiddenStatus = asyncHandler(async (req, res) => {
   const { isHidden } = req.body;
-  const listing = await Listing.findByIdAndUpdate(req.params.id, { isHidden: Boolean(isHidden) }, { new: true });
+  if (typeof isHidden !== 'boolean') throw new BadRequest('isHidden must be a boolean.');
+  const listing = await Listing.findByIdAndUpdate(req.params.id, { isHidden }, { new: true, runValidators: true });
 
   if (!listing) throw new NotFound('Listing not found');
 

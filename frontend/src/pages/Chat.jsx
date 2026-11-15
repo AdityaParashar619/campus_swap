@@ -7,8 +7,9 @@ import { Button, PageTransition, PremiumCard } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
 import Layout from '../layouts/Layout';
 import { authAPI, getAccessToken, messageAPI } from '../services/api';
+import { resolveSocketUrl } from '../utils/securityLinks';
 
-const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
+const SOCKET_URL = resolveSocketUrl(import.meta.env.VITE_SOCKET_URL, window.location.origin);
 
 const getInitials = (name) => name?.split(' ').map((w) => w[0]).join('').toUpperCase().slice(0, 2) || '?';
 
@@ -34,7 +35,7 @@ export default function Chat() {
   const messagesEndRef = useRef(null);
 
   useEffect(() => {
-    const newSocket = io(SOCKET_URL, { auth: { token: getAccessToken() } });
+    const newSocket = io(SOCKET_URL, { path: '/socket.io/', auth: { token: getAccessToken() } });
     newSocket.emit('register', user?.id);
     setSocket(newSocket);
 

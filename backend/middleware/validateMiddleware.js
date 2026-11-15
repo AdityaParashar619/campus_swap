@@ -1,3 +1,5 @@
+import { PASSWORD_POLICY_MESSAGE, isPasswordStrong } from '../utils/passwordPolicy.js';
+
 export const validateBody = (requiredFields = []) => (req, _res, next) => {
   const missing = requiredFields.filter((field) => {
     const value = req.body?.[field];
@@ -13,7 +15,6 @@ export const validateBody = (requiredFields = []) => (req, _res, next) => {
 
   next();
 };
-
 export const validateAuthPayload = (mode = 'login') => (req, _res, next) => {
   const errors = {};
   const email = String(req.body?.email || '').trim().toLowerCase();
@@ -29,8 +30,8 @@ export const validateAuthPayload = (mode = 'login') => (req, _res, next) => {
 
   if (!password) {
     errors.password = 'Password is required';
-  } else if (mode !== 'login' && (password.length < 12 || password.length > 128)) {
-    errors.password = 'Password must be between 12 and 128 characters';
+  } else if (mode !== 'login' && !isPasswordStrong(password)) {
+    errors.password = PASSWORD_POLICY_MESSAGE;
   }
 
   if (mode === 'register') {
@@ -60,7 +61,7 @@ export const validatePasswordResetPayload = (req, _res, next) => {
 
   if (!token) errors.token = 'Reset token is required';
   if (!password) errors.password = 'Password is required';
-  else if (password.length < 12 || password.length > 128) errors.password = 'Password must be between 12 and 128 characters';
+  else if (!isPasswordStrong(password)) errors.password = PASSWORD_POLICY_MESSAGE;
 
   if (Object.keys(errors).length > 0) {
     return next({ status: 400, message: 'Validation failed', details: errors });

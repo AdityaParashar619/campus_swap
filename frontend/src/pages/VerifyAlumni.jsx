@@ -1,13 +1,23 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { authAPI, getApiErrorMessage } from '../services/api';
+import { consumeTokenFragment } from '../utils/securityLinks';
 
 export default function VerifyAlumni() {
   const [params] = useSearchParams();
   const [message, setMessage] = useState('Verifying your email…');
   const [error, setError] = useState('');
+  const verificationStarted = useRef(false);
   useEffect(() => {
-    authAPI.verifyAlumniEmail({ email: params.get('email'), token: params.get('token') })
+    if (verificationStarted.current) return;
+    verificationStarted.current = true;
+    const token = consumeTokenFragment(window.location.hash, window.location, window.history);
+    if (!token) {
+      setError('Invalid or expired verification link.');
+      setMessage('');
+      return;
+    }
+    authAPI.verifyAlumniEmail({ email: params.get('email'), token })
       .then((response) => setMessage(response.data.message))
       .catch((requestError) => { setError(getApiErrorMessage(requestError, 'Verification failed')); setMessage(''); });
   }, [params]);

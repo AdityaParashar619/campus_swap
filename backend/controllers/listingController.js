@@ -1,25 +1,16 @@
 import { asyncHandler } from '../middleware/errorMiddleware.js';
-import { BadRequest, Forbidden, NotFound } from '../utils/AppError.js';
+import { NotFound } from '../utils/AppError.js';
 import Listing from '../models/Listing.js';
 import User from '../models/User.js';
+import { serializePublicProfile } from '../utils/connections.js';
+import { assertAvailabilityTransition, validateListingPayload } from '../utils/listingValidation.js';
 
 export const createListing = asyncHandler(async (req, res) => {
-  const { title, description, category, condition, images, availability, tags, price, isSwapAllowed, location } = req.body;
-
-  if (!title) throw new BadRequest('Title required');
-  const normalizedCondition = condition === 'used' ? 'good' : condition;
+  const values = validateListingPayload(req.body);
 
   const listing = await Listing.create({
-    title,
-    description,
-    category,
-    condition: normalizedCondition,
-    images,
-    availability,
-    tags,
-    price,
-    isSwapAllowed,
-    location,
+    ...values,
+    availability: 'available',
     user: req.user.userId
   });
 
@@ -48,30 +39,37 @@ export const getListings = asyncHandler(async (req, res) => {
 
   const [items, total] = await Promise.all([
     Listing.find(filter)
-      .populate('user', 'name email profilePicture trustScore')
+      .populate('user', 'name email profilePicture trustScore contactVisibility phoneNumber whatsappNumber')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),
     Listing.countDocuments(filter)
   ]);
 
+  const publicItems = items.map((item) => {
+    const data = item.toObject();
+    if (data.user) data.user = serializePublicProfile(data.user);
+    return data;
+  });
+
   res.json({
     success: true,
-    data: items,
+    data: publicItems,
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
   });
 });
 
 export const updateListing = asyncHandler(async (req, res) => {
-  const listing = await Listing.findById(req.params.id);
+  const updates = validateListingPayload(req.body, { partial: true });
+  const existing = await Listing.findOne({ _id: req.params.id, user: req.user.userId });
+  if (!existing) throw new NotFound('Listing not found');
+  assertAvailabilityTransition(existing.availability, updates.availability);
+  const listing = await Listing.findOneAndUpdate(
+    { _id: req.params.id, user: req.user.userId },
+    { $set: updates },
+    { new: true, runValidators: true }
+  );
   if (!listing) throw new NotFound('Listing not found');
-  if (listing.user.toString() !== req.user.userId) throw new Forbidden('Not authorized');
-
-  const updates = { ...req.body };
-  if (updates.condition === 'used') updates.condition = 'good';
-
-  Object.assign(listing, updates);
-  await listing.save();
 
   res.json({ success: true, message: 'Listing updated', data: listing });
 });
@@ -99,10 +97,8 @@ export const toggleFavoriteListing = asyncHandler(async (req, res) => {
 });
 
 export const deleteListing = asyncHandler(async (req, res) => {
-  const listing = await Listing.findById(req.params.id);
+  const listing = await Listing.findOneAndDelete({ _id: req.params.id, user: req.user.userId });
   if (!listing) throw new NotFound('Listing not found');
-  if (listing.user.toString() !== req.user.userId) throw new Forbidden('Not authorized');
-
-  await listing.deleteOne();
+  await User.updateMany({ savedListings: listing._id }, { $pull: { savedListings: listing._id } });
   res.json({ success: true, message: 'Listing deleted' });
 });

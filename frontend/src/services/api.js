@@ -1,7 +1,8 @@
 import axios from 'axios';
+import { shouldRefreshAfterUnauthorized } from '../utils/authRequestPolicy';
+import { createSingleFlight } from '../utils/singleFlight';
 
 let accessToken = null;
-let refreshInFlight = null;
 export const setAccessToken = (token) => { accessToken = token || null; };
 export const getAccessToken = () => accessToken;
 
@@ -25,6 +26,8 @@ const API = axios.create({
   withCredentials: true
 });
 
+export const refreshAuthSession = createSingleFlight(() => API.post('/auth/refresh'));
+
 API.interceptors.request.use((config) => {
   if (accessToken) config.headers.Authorization = `Bearer ${accessToken}`;
   return config;
@@ -46,12 +49,10 @@ API.interceptors.response.use(
 
     error.userMessage = normalizedMessage;
 
-    const publicAuthRequest = /\/auth\/(login|register(?:\/student|\/alumni)?|verify-email|verify-alumni-email|resend-otp|forgot-password|reset-password)$/.test(error.config?.url || '');
-    if (error.response?.status === 401 && !publicAuthRequest && !error.config?._retried && !error.config?.url?.includes('/auth/refresh')) {
+    if (shouldRefreshAfterUnauthorized({ status: error.response?.status, url: error.config?.url || '', retried: error.config?._retried })) {
       error.config._retried = true;
       try {
-        refreshInFlight ||= API.post('/auth/refresh').finally(() => { refreshInFlight = null; });
-        const refreshed = await refreshInFlight;
+        const refreshed = await refreshAuthSession();
         setAccessToken(refreshed.data.token);
         error.config.headers.Authorization = `Bearer ${refreshed.data.token}`;
         return API.request(error.config);
@@ -76,7 +77,9 @@ export const authAPI = {
   logout: () => API.post('/auth/logout'),
   updatePassword: (data) => API.patch('/auth/me/password', data),
   forgotPassword: (data) => API.post('/auth/forgot-password', data),
+  verifyPasswordResetOtp: (data) => API.post('/auth/verify-reset-otp', data),
   resetPassword: (data) => API.post('/auth/reset-password', data),
+  previewDevelopmentMail: (previewToken) => API.post('/auth/dev-mail-preview', { previewToken }),
   getUsers: () => API.get('/auth/users'),
   getMe: () => API.get('/auth/me'),
   updateMe: (data) => API.patch('/auth/me', data)

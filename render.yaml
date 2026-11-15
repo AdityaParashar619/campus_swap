@@ -14,6 +14,30 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
+      - key: TRUST_PROXY_HOPS
+        sync: false
+      - key: OTP_PEPPER
+        sync: false
+      - key: OTP_MOCK_ENABLED
+        value: "false"
+      - key: RESEND_API_KEY
+        sync: false
+      - key: EMAIL_FROM
+        sync: false
+      - key: RESEND_DOMAIN_VERIFIED
+        value: "false"
+      - key: RESEND_TEST_MODE
+        value: "false"
+      - key: RESEND_TEST_RECIPIENT
+        value: delivered@resend.dev
+      - key: ALLOWED_COLLEGE_DOMAINS
+        sync: false
+      - key: INSTITUTION_EMAIL_PATTERN
+        sync: false
+      - key: ENROLLMENT_PATTERN
+        sync: false
+      - key: INSTITUTION_BRANCHES
+        sync: false
       - key: ADMIN_EMAIL
         sync: false
       - key: ADMIN_PASSWORD
