@@ -1,0 +1,27 @@
+services:
+  backend:
+    environment:
+      NODE_ENV: production
+      JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.production}
+      OTP_PEPPER: ${OTP_PEPPER:?Set independent OTP_PEPPER in .env.production}
+      OTP_MOCK_ENABLED: "false"
+      EMAIL_PROVIDER: ${EMAIL_PROVIDER:-resend}
+      GMAIL_USER: ${GMAIL_USER:-}
+      GMAIL_APP_PASSWORD: ${GMAIL_APP_PASSWORD:-}
+      RESEND_API_KEY: ${RESEND_API_KEY:-}
+      RESEND_DOMAIN_VERIFIED: ${RESEND_DOMAIN_VERIFIED:-false}
+      RESEND_TEST_MODE: "false"
+      RESEND_TEST_RECIPIENT: ${RESEND_TEST_RECIPIENT:-delivered@resend.dev}
+      EMAIL_FROM: ${EMAIL_FROM:-}
+      FRONTEND_URL: ${FRONTEND_URL:?Set HTTPS frontend origin}
+      TRUST_PROXY_HOPS: ${TRUST_PROXY_HOPS:?Set the exact trusted ingress hop count}
+      ALLOWED_COLLEGE_DOMAINS: ${ALLOWED_COLLEGE_DOMAINS:?Set approved college domains}
+      INSTITUTION_EMAIL_PATTERN: ${INSTITUTION_EMAIL_PATTERN:?Set institutional email pattern}
+      ENROLLMENT_PATTERN: ${ENROLLMENT_PATTERN:?Set enrollment pattern}
+      INSTITUTION_BRANCHES: ${INSTITUTION_BRANCHES:?Set allowed branches}
+  frontend:
+    build:
+      args:
+        VITE_API_BASE_URL: /api
+    ports:
+      - "${FRONTEND_PORT:-8080}:80"

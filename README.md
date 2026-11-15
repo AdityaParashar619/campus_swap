@@ -47,7 +47,7 @@ CI runs backend tests and the frontend production build for pushes and pull requ
 
 ## Identity configuration
 
-Student registration requires the institution's approved domains in backend `ALLOWED_COLLEGE_DOMAINS`; optional enrollment, department, branch, club, and semester values are configured using `ENROLLMENT_PATTERN`, `INSTITUTION_DEPARTMENTS`, `INSTITUTION_BRANCHES`, `INSTITUTION_CLUBS`, and `INSTITUTION_SEMESTERS`. Configure `EMAIL_PROVIDER_URL`, `EMAIL_PROVIDER_API_KEY`, and a separate `OTP_PEPPER` for delivery and OTP hashing. Production student registration fails closed without approved domains and email delivery. Alumni accounts stay pending until an authorized institutional review.
+Student registration requires the institution's approved domains in backend `ALLOWED_COLLEGE_DOMAINS`; optional enrollment, department, branch, club, and semester values are configured using `ENROLLMENT_PATTERN`, `INSTITUTION_DEPARTMENTS`, `INSTITUTION_BRANCHES`, `INSTITUTION_CLUBS`, and `INSTITUTION_SEMESTERS`. Email uses the Resend SDK configured through backend-only `RESEND_API_KEY` and `EMAIL_FROM`; production delivery remains disabled until `RESEND_DOMAIN_VERIFIED=true`. Use `RESEND_TEST_MODE=true` only in development with Resend's onboarding sender and permitted test recipient. A separate `OTP_PEPPER` protects OTP hashes. Alumni accounts stay pending until an authorized institutional review.
 
 For IAM access, configure a dedicated `SUPER_ADMIN_EMAIL` and `SUPER_ADMIN_PASSWORD` before first startup. `ADMIN_EMAIL` creates only the legacy moderation administrator and cannot grant IAM roles. Do not point the super-admin bootstrap at an existing user account.
 

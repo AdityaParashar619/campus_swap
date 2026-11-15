@@ -11,7 +11,7 @@ export const createOpaqueToken = () => crypto.randomBytes(48).toString('base64ur
 
 export const createOtp = () => crypto.randomInt(0, 1_000_000).toString().padStart(6, '0');
 
-export const hashOtp = (email, otp) => crypto.createHmac('sha256', env.otpPepper).update(`${email}:${otp}`).digest('hex');
+export const hashOtp = (email, otp, purpose = 'student-verification') => crypto.createHmac('sha256', env.otpPepper).update(`${purpose}:${email}:${otp}`).digest('hex');
 
 export const secureHashEquals = (left, right) => {
   if (typeof left !== 'string' || typeof right !== 'string' || left.length !== right.length) return false;

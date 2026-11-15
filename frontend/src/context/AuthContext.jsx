@@ -1,5 +1,5 @@
 import { createContext, useEffect, useState } from 'react';
-import { authAPI, setAccessToken } from '../services/api';
+import { authAPI, refreshAuthSession, setAccessToken } from '../services/api';
 
 export const AuthContext = createContext();
 
@@ -16,7 +16,7 @@ export const AuthProvider = ({ children }) => {
     let mounted = true;
     const hydrateAuth = async () => {
       try {
-        const session = await authAPI.refresh();
+        const session = await refreshAuthSession();
         if (!mounted) return;
         setAccessToken(session.data.token);
         const response = await authAPI.getMe();

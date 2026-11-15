@@ -4,6 +4,7 @@ import {
   getAllUsers,
   getMe,
   login,
+  previewDevelopmentMail,
   logout,
   refreshSession,
   registerAlumni,
@@ -13,11 +14,12 @@ import {
   updatePassword,
   updateProfile,
   verifyAlumniEmail,
+  verifyPasswordResetOtp,
   verifyStudentEmail
 } from '../controllers/authController.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 import { validateAuthPayload, validateBody, validatePasswordResetPayload } from '../middleware/validateMiddleware.js';
-import { authAttemptLimiter } from '../middleware/securityMiddleware.js';
+import { authAccountAttemptLimiter, authAttemptLimiter, refreshAttemptLimiter } from '../middleware/securityMiddleware.js';
 import { env } from '../config/env.js';
 
 const requireTrustedOrigin = (req, res, next) => {
@@ -29,17 +31,19 @@ const requireTrustedOrigin = (req, res, next) => {
 
 const router = express.Router();
 
-router.post('/register', authAttemptLimiter, registerStudent);
-router.post('/register/student', authAttemptLimiter, registerStudent);
-router.post('/register/alumni', authAttemptLimiter, registerAlumni);
-router.post('/verify-alumni-email', authAttemptLimiter, verifyAlumniEmail);
-router.post('/verify-email', authAttemptLimiter, verifyStudentEmail);
-router.post('/resend-otp', authAttemptLimiter, resendStudentOtp);
-router.post('/login', authAttemptLimiter, validateBody(['email', 'password']), validateAuthPayload('login'), login);
-router.post('/refresh', requireTrustedOrigin, authAttemptLimiter, refreshSession);
+router.post('/register', authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, registerStudent);
+router.post('/register/student', authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, registerStudent);
+router.post('/register/alumni', authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, registerAlumni);
+router.post('/verify-alumni-email', authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, verifyAlumniEmail);
+router.post('/verify-email', authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, verifyStudentEmail);
+router.post('/resend-otp', authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, resendStudentOtp);
+router.post('/login', authAttemptLimiter, validateBody(['email', 'password']), authAccountAttemptLimiter, validateAuthPayload('login'), login);
+router.post('/refresh', requireTrustedOrigin, refreshAttemptLimiter, refreshSession);
 router.post('/logout', requireTrustedOrigin, logout);
-router.post('/forgot-password', authAttemptLimiter, validateBody(['email']), forgotPassword);
+router.post('/forgot-password', authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, forgotPassword);
+router.post('/verify-reset-otp', authAttemptLimiter, validateBody(['email', 'otp']), authAccountAttemptLimiter, verifyPasswordResetOtp);
 router.post('/reset-password', authAttemptLimiter, validatePasswordResetPayload, resetPassword);
+router.post('/dev-mail-preview', authAttemptLimiter, validateBody(['previewToken']), previewDevelopmentMail);
 
 router.get('/users', authMiddleware, getAllUsers);
 router.get('/me', authMiddleware, getMe);
