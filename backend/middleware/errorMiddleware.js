@@ -29,7 +29,7 @@ export const errorHandler = (err, req, res, next) => {
     details = { field: error.path };
   }
 
-  if (status >= 500 && env.nodeEnv === 'production') {
+  if (status >= 500 && env.nodeEnv === 'production' && error.expose !== true) {
     message = 'Internal Server Error';
     details = {};
   }

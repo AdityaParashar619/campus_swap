@@ -16,6 +16,9 @@ const Feedback = lazy(() => import('./pages/Feedback'));
 const ForgotPassword = lazy(() => import('./pages/ForgotPassword'));
 const Landing = lazy(() => import('./pages/Landing'));
 const Listings = lazy(() => import('./pages/Listings'));
+const ListingDetails = lazy(() => import('./pages/ListingDetails'));
+const MyListings = lazy(() => import('./pages/MyListings'));
+const SavedListings = lazy(() => import('./pages/SavedListings'));
 const Login = lazy(() => import('./pages/Login'));
 const Network = lazy(() => import('./pages/Network'));
 const Notes = lazy(() => import('./pages/Notes'));
@@ -59,6 +62,9 @@ function AppContent() {
           <Route path="/reset-password" element={<ResetPassword />} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/listings" element={<ProtectedRoute><Listings /></ProtectedRoute>} />
+          <Route path="/listings/:id" element={<ProtectedRoute><ListingDetails /></ProtectedRoute>} />
+          <Route path="/my-listings" element={<ProtectedRoute><MyListings /></ProtectedRoute>} />
+          <Route path="/saved-listings" element={<ProtectedRoute><SavedListings /></ProtectedRoute>} />
           <Route path="/notes" element={<ProtectedRoute><Notes /></ProtectedRoute>} />
           <Route path="/network" element={<ProtectedRoute><Network /></ProtectedRoute>} />
           <Route path="/bounties" element={<ProtectedRoute><Bounties /></ProtectedRoute>} />

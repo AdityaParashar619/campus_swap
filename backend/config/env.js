@@ -39,6 +39,8 @@ const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || '';
 const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD || '';
 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
 const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS || 0);
+const productImageMaxCount = Number(process.env.PRODUCT_IMAGE_MAX_COUNT || 5);
+const productImageMaxSizeMb = Number(process.env.PRODUCT_IMAGE_MAX_SIZE_MB || 5);
 const otpPepper = process.env.OTP_PEPPER || (nodeEnv === 'production' ? '' : process.env.JWT_SECRET);
 
 const port = Number(process.env.PORT || 5000);
@@ -47,6 +49,12 @@ if (!Number.isInteger(port) || port < 0 || port > 65535) {
 }
 if (!Number.isInteger(trustProxyHops) || trustProxyHops < 0 || trustProxyHops > 10) {
   throw new Error('TRUST_PROXY_HOPS must be an integer between 0 and 10');
+}
+if (!Number.isInteger(productImageMaxCount) || productImageMaxCount < 1 || productImageMaxCount > 10) {
+  throw new Error('PRODUCT_IMAGE_MAX_COUNT must be an integer from 1 to 10');
+}
+if (!Number.isFinite(productImageMaxSizeMb) || productImageMaxSizeMb < 1 || productImageMaxSizeMb > 20) {
+  throw new Error('PRODUCT_IMAGE_MAX_SIZE_MB must be between 1 and 20');
 }
 if (!institutionBranches.length || institutionBranches.some((branch) => !SATI_SUPPORTED_BRANCHES.has(branch)) || new Set(institutionBranches).size !== institutionBranches.length) {
   throw new Error('INSTITUTION_BRANCHES must contain only unique supported SATI branch codes');
@@ -158,5 +166,11 @@ export const env = {
   otpResendCooldownSeconds,
   accessTokenTtl: process.env.ACCESS_TOKEN_TTL || '15m',
   refreshTokenDays: Number(process.env.REFRESH_TOKEN_DAYS) || 30,
-  trustProxyHops
+  trustProxyHops,
+  cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
+  cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || '',
+  cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || '',
+  productImageMaxCount,
+  productImageMaxSizeBytes: Math.floor(productImageMaxSizeMb * 1024 * 1024),
+  productImagePendingTtlMs: 24 * 60 * 60 * 1000
 };

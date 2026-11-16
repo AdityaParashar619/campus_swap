@@ -24,5 +24,6 @@ listingSchema.index({ category: 1 });
 listingSchema.index({ availability: 1 });
 listingSchema.index({ tags: 1 });
 listingSchema.index({ title: 'text', description: 'text', tags: 'text' });
+listingSchema.index({ isHidden: 1, availability: 1, createdAt: -1, _id: -1 });
 
 export default mongoose.model('Listing', listingSchema);

@@ -4,8 +4,9 @@ import test from 'node:test';
 process.env.JWT_SECRET ||= 'isolated-listing-test-secret';
 process.env.NODE_ENV = 'test';
 
-const [{ default: Listing }, { default: User }, { default: Bounty }, { createListing, updateListing, deleteListing, getListings }, { getBounties }, { setListingHiddenStatus }, { serializePublicProfile }, { hasPermission }] = await Promise.all([
+const [{ default: Listing }, { default: ProductImage }, { default: User }, { default: Bounty }, { createListing, updateListing, deleteListing, getListings }, { getBounties }, { setListingHiddenStatus }, { serializePublicProfile }, { hasPermission }] = await Promise.all([
   import('../models/Listing.js'),
+  import('../models/ProductImage.js'),
   import('../models/User.js'),
   import('../models/Bounty.js'),
   import('../controllers/listingController.js'),
@@ -32,7 +33,7 @@ test('listing owner can update editable fields with owner-scoped atomic query', 
     const { res, error } = await invoke(updateListing, { user: { userId: 'owner-a' }, params: { id: 'listing-1' }, body: { title: 'Updated' } });
     assert.equal(error, undefined);
     assert.equal(res.body.data.title, 'Updated');
-    assert.deepEqual(args[0], { _id: 'listing-1', user: 'owner-a' });
+    assert.deepEqual(args[0], { _id: 'listing-1', user: 'owner-a', availability: 'available' });
     assert.deepEqual(args[1], { $set: { title: 'Updated' } });
     assert.equal(args[2].runValidators, true);
   } finally { Listing.findOne = originalFind; Listing.findOneAndUpdate = original; }
@@ -76,25 +77,26 @@ test('non-owner cannot update or delete another user listing', { concurrency: fa
 });
 
 test('valid listing creation normalizes fields, derives owner, and forces available status', { concurrency: false }, async () => {
-  const original = Listing.create;
+  const original = Listing.prototype.save;
   let payload;
-  Listing.create = async (value) => { payload = value; return value; };
+  Listing.prototype.save = async function save() { payload = this.toObject(); return this; };
   try {
-    const { res, error } = await invoke(createListing, { user: { userId: 'owner-a' }, body: { title: '  Calculator  ', category: 'electronics', condition: 'good', price: 499.999, availability: 'sold' } });
+    const ownerId = '507f1f77bcf86cd799439011';
+    const { res, error } = await invoke(createListing, { user: { userId: ownerId }, body: { title: '  Calculator  ', category: 'electronics', condition: 'good', price: 499.999, availability: 'sold' } });
     assert.equal(error, undefined);
     assert.equal(res.statusCode, 201);
     assert.equal(payload.title, 'Calculator');
     assert.equal(payload.category, 'Electronics');
     assert.equal(payload.price, 500);
     assert.equal(payload.availability, 'available');
-    assert.equal(payload.user, 'owner-a');
-  } finally { Listing.create = original; }
+    assert.equal(payload.user.toString(), ownerId);
+  } finally { Listing.prototype.save = original; }
 });
 
 test('listing creation rejects malformed, excessive, and protected values without writing', { concurrency: false }, async () => {
-  const original = Listing.create;
+  const original = Listing.prototype.save;
   let writes = 0;
-  Listing.create = async () => { writes += 1; };
+  Listing.prototype.save = async () => { writes += 1; };
   try {
     const invalidBodies = [
       { title: ' ' }, { title: 'x'.repeat(121) }, { title: 'Item', price: -1 },
@@ -107,7 +109,37 @@ test('listing creation rejects malformed, excessive, and protected values withou
       assert.equal(error.status, 400);
     }
     assert.equal(writes, 0);
-  } finally { Listing.create = original; }
+  } finally { Listing.prototype.save = original; }
+});
+
+test('listing creation attaches only an approved pending image owned by the seller', { concurrency: false }, async () => {
+  const originals = { save: Listing.prototype.save, find: ProductImage.find, updateMany: ProductImage.updateMany };
+  const ownerId = '507f1f77bcf86cd799439011';
+  const imageId = '507f1f77bcf86cd799439012';
+  const url = 'https://res.cloudinary.com/test/image/upload/item.jpg';
+  let reserved;
+  Listing.prototype.save = async function save() { return this; };
+  ProductImage.find = async () => [{ _id: imageId, secureUrl: url, owner: { toString: () => ownerId }, status: 'pending', listing: null, expiresAt: new Date(Date.now() + 60_000) }];
+  ProductImage.updateMany = async (filter, update) => { reserved = { filter, update }; return { modifiedCount: 1 }; };
+  try {
+    const { res, error } = await invoke(createListing, { user: { userId: ownerId }, body: { title: 'Item', images: [url] } });
+    assert.equal(error, undefined);
+    assert.deepEqual(res.body.listing.images, [url]);
+    assert.equal(reserved.update.$set.status, 'attached');
+  } finally { Listing.prototype.save = originals.save; ProductImage.find = originals.find; ProductImage.updateMany = originals.updateMany; }
+});
+
+test('listing edit preserves and reorders legacy image strings without claiming ownership', { concurrency: false }, async () => {
+  const originals = { listingFind: Listing.findOne, listingUpdate: Listing.findOneAndUpdate, imageFind: ProductImage.find };
+  const first = 'https://legacy.example/one.jpg'; const second = 'https://legacy.example/two.jpg';
+  Listing.findOne = async () => ({ _id: 'listing-1', availability: 'available', images: [first, second] });
+  Listing.findOneAndUpdate = async (_filter, update) => ({ images: update.$set.images });
+  ProductImage.find = async () => [];
+  try {
+    const { res, error } = await invoke(updateListing, { user: { userId: 'owner-a' }, params: { id: 'listing-1' }, body: { images: [second, first] } });
+    assert.equal(error, undefined);
+    assert.deepEqual(res.body.data.images, [second, first]);
+  } finally { Listing.findOne = originals.listingFind; Listing.findOneAndUpdate = originals.listingUpdate; ProductImage.find = originals.imageFind; }
 });
 
 test('listing status can become sold once but terminal states cannot be reopened', { concurrency: false }, async () => {
@@ -122,6 +154,18 @@ test('listing status can become sold once but terminal states cannot be reopened
     Listing.findOne = async () => ({ availability: 'sold' });
     const reopened = await invoke(updateListing, { user: { userId: 'owner-a' }, params: { id: 'listing-1' }, body: { availability: 'available' } });
     assert.equal(reopened.error.status, 400);
+  } finally { Listing.findOne = originalFind; Listing.findOneAndUpdate = originalUpdate; }
+});
+
+test('listing update rejects a concurrent status change instead of overwriting it', { concurrency: false }, async () => {
+  const originalFind = Listing.findOne;
+  const originalUpdate = Listing.findOneAndUpdate;
+  Listing.findOne = async () => ({ availability: 'available' });
+  Listing.findOneAndUpdate = async () => null;
+  try {
+    const { error } = await invoke(updateListing, { user: { userId: 'owner-a' }, params: { id: 'listing-1' }, body: { availability: 'sold' } });
+    assert.equal(error.status, 400);
+    assert.match(error.message, /changed while it was being updated/);
   } finally { Listing.findOne = originalFind; Listing.findOneAndUpdate = originalUpdate; }
 });
 

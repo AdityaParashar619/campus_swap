@@ -10,6 +10,7 @@ export const sendMessage = asyncHandler(async (req, res) => {
   if (!receiverId || !text) {
     throw new BadRequest('Receiver and text required');
   }
+  if (receiverId === req.user.userId) throw new BadRequest('You cannot message yourself.');
 
   const access = await getChatAccess(req.user.userId, receiverId);
   if (!access.canSend) {

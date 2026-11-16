@@ -50,3 +50,12 @@ export const authAccountAttemptLimiter = rateLimit({
   keyGenerator: (req) => authAccountRateLimitKey(req.body?.email),
   message: { success: false, message: 'Too many attempts for this account. Try again later.' }
 });
+
+export const productImageUploadLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.userId || req.ip,
+  message: { success: false, message: 'Too many image uploads. Try again later.' }
+});

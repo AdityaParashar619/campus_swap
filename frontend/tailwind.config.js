@@ -1,4 +1,5 @@
 export default {
+  darkMode: 'class',
   content: [
     "./index.html",
     "./src/**/*.{js,jsx}"
@@ -6,20 +7,8 @@ export default {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['Inter', 'system-ui', 'sans-serif'],
-        display: ['Poppins', 'system-ui', 'sans-serif'],
-      },
-      colors: {
-        'glow-indigo': 'rgba(79, 70, 229, 0.3)',
-        'glow-purple': 'rgba(139, 92, 246, 0.3)',
-      },
-      boxShadow: {
-        'glow': '0 0 20px rgba(79, 70, 229, 0.4)',
-        'glow-lg': '0 0 30px rgba(79, 70, 229, 0.5)',
-        'glow-purple': '0 0 20px rgba(139, 92, 246, 0.4)',
-      },
-      backdropBlur: {
-        'xs': '2px',
+        sans: ['Plus Jakarta Sans', 'system-ui', 'sans-serif'],
+        display: ['Space Grotesk', 'system-ui', 'sans-serif'],
       },
       letterSpacing: {
         'tight-hero': '-0.02em',

@@ -10,6 +10,7 @@ import { seedDatabase } from './scripts/seed.js';
 import User from './models/User.js';
 import { socketAuthMiddleware } from './middleware/socketAuthMiddleware.js';
 import { verifyEmailProviderConnection } from './utils/emailProvider.js';
+import { cleanupExpiredProductImages } from './services/productImageService.js';
 
 export const app = createApp();
 export const httpServer = createServer(app);
@@ -43,6 +44,7 @@ export const connectDatabaseInBackground = async () => {
     await connectDB();
     if (env.seedOnStartup) await seedDatabase();
     await ensureAdminUser();
+    void cleanupExpiredProductImages().catch(() => console.error('Product image cleanup could not complete.'));
   } catch (error) {
     console.error(`MongoDB connection failed: ${error.message}`);
   } finally {
@@ -66,6 +68,10 @@ export const startServer = () => {
 
   const retryTimer = setInterval(() => void connectDatabaseInBackground(), env.databaseRetryIntervalMs);
   retryTimer.unref();
+  const imageCleanupTimer = setInterval(() => {
+    if (isDatabaseReady()) void cleanupExpiredProductImages().catch(() => console.error('Product image cleanup could not complete.'));
+  }, 60 * 60 * 1000);
+  imageCleanupTimer.unref();
 
   let shuttingDown = false;
   const shutdown = (signal) => {
@@ -73,6 +79,7 @@ export const startServer = () => {
     shuttingDown = true;
     console.log(`Received ${signal}; shutting down`);
     clearInterval(retryTimer);
+    clearInterval(imageCleanupTimer);
     const closeHttpServer = () => httpServer.close(async (error) => {
       try {
         await mongoose.disconnect();
