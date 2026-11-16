@@ -86,11 +86,23 @@ export const authAPI = {
 };
 
 export const listingAPI = {
-  getAll: (params) => API.get('/listings', { params }),
+  getAll: (params, options = {}) => API.get('/listings', { params, signal: options.signal }),
+  getById: (id, options = {}) => API.get(`/listings/${id}`, { signal: options.signal }),
+  getMine: (params, options = {}) => API.get('/listings/mine', { params, signal: options.signal }),
+  getSaved: (params, options = {}) => API.get('/listings/saved', { params, signal: options.signal }),
+  getFavoriteStatuses: (listingIds, options = {}) => API.post('/listings/favorites/status', { listingIds }, { signal: options.signal }),
   create: (data) => API.post('/listings', data),
   update: (id, data) => API.patch(`/listings/${id}`, data),
   delete: (id) => API.delete(`/listings/${id}`),
-  toggleFavorite: (id) => API.post(`/listings/${id}/favorite`)
+  toggleFavorite: (id) => API.post(`/listings/${id}/favorite`),
+  addFavorite: (id) => API.put(`/listings/${id}/favorite`),
+  removeFavorite: (id) => API.delete(`/listings/${id}/favorite`),
+  uploadImages: (files) => {
+    const data = new FormData();
+    files.forEach((file) => data.append('images', file));
+    return API.post('/listings/images', data, { timeout: 60000 });
+  },
+  deletePendingImage: (id) => API.delete(`/listings/images/${id}`)
 };
 
 export const requestAPI = {

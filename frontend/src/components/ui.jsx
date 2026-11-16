@@ -1,7 +1,8 @@
-import { motion, useInView } from 'framer-motion';
+import { motion, useInView, useReducedMotion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 export const Button = ({ children, onClick, variant = 'primary', size = 'md', className = '', ...props }) => {
+  const reduceMotion = useReducedMotion();
   const sizeClasses = {
     sm: 'px-4 py-2 text-sm',
     md: 'px-5 py-2.5 text-sm',
@@ -12,15 +13,15 @@ export const Button = ({ children, onClick, variant = 'primary', size = 'md', cl
     primary: 'bg-blue-600 text-white hover:bg-blue-700',
     secondary: 'bg-slate-100/80 text-slate-800 dark:bg-slate-800 dark:text-slate-100',
     danger: 'bg-red-500 text-white hover:bg-red-600',
-    gradient: 'bg-gradient-to-r from-blue-600 via-violet-600 to-cyan-500 text-white shadow-lg shadow-blue-500/25',
-    glass: 'bg-white/30 dark:bg-slate-900/40 border border-slate-300/30 text-slate-800 dark:text-slate-100'
+    gradient: 'bg-blue-600 text-white hover:bg-blue-700',
+    glass: 'border border-slate-300 bg-white text-slate-800 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800'
   };
 
   return (
     <motion.button
-      whileHover={{ scale: 1.03 }}
-      whileTap={{ scale: 0.97 }}
-      className={`${sizeClasses[size]} rounded-xl font-semibold transition-all duration-200 cursor-pointer ${variants[variant]} ${className}`}
+      whileHover={reduceMotion ? undefined : { y: -1 }}
+      whileTap={reduceMotion ? undefined : { scale: 0.98 }}
+      className={`${sizeClasses[size]} rounded-lg font-semibold cursor-pointer disabled:cursor-not-allowed disabled:opacity-60 ${variants[variant]} ${className}`}
       onClick={onClick}
       {...props}
     >
@@ -45,10 +46,8 @@ export const Card = ({ children, className = '', ...props }) => (
 
 export const PremiumCard = ({ children, className = '', hover = true, ...props }) => (
   <motion.div
-    initial={{ opacity: 0, y: 12 }}
-    whileInView={{ opacity: 1, y: 0 }}
-    whileHover={hover ? { y: -6, scale: 1.01 } : {}}
-    transition={{ duration: 0.25 }}
+    whileHover={hover ? { y: -2 } : undefined}
+    transition={{ duration: 0.16 }}
     className={`premium-card p-6 ${className}`}
     {...props}
   >
@@ -68,9 +67,9 @@ export const PageTransition = ({ children }) => (
 );
 
 export const PageLoader = ({ label = 'Loading...' }) => (
-  <div className="min-h-screen flex items-center justify-center">
+  <div className="min-h-[50vh] flex items-center justify-center" role="status" aria-live="polite">
     <div className="text-center">
-      <div className="w-14 h-14 mx-auto rounded-2xl border-4 border-slate-200 border-t-blue-500 animate-spin" />
+      <div className="w-10 h-10 mx-auto rounded-full border-4 border-slate-200 border-t-blue-600 animate-spin" aria-hidden="true" />
       <p className="mt-4 text-sm text-slate-500">{label}</p>
     </div>
   </div>

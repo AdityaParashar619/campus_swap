@@ -14,7 +14,7 @@ const limits = Object.freeze({
   tag: 40,
   tags: 10,
   image: 2048,
-  images: 8
+  images: 5
 });
 
 const categoryAliases = new Map(LISTING_CATEGORIES.map((category) => [category.toLowerCase(), category]));

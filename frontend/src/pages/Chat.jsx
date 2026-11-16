@@ -1,6 +1,6 @@
 import { motion } from 'framer-motion';
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { io } from 'socket.io-client';
 import ReportDialog from '../components/ReportDialog';
 import { Button, PageTransition, PremiumCard } from '../components/ui';
@@ -8,6 +8,7 @@ import { useAuth } from '../hooks/useAuth';
 import Layout from '../layouts/Layout';
 import { authAPI, getAccessToken, messageAPI } from '../services/api';
 import { resolveSocketUrl } from '../utils/securityLinks';
+import { getConversationClasses, getMessageBubbleClasses } from '../utils/chatPresentation';
 
 const SOCKET_URL = resolveSocketUrl(import.meta.env.VITE_SOCKET_URL, window.location.origin);
 
@@ -24,6 +25,10 @@ export default function Chat() {
   const [typingByUser, setTypingByUser] = useState({});
   const [onlineMap, setOnlineMap] = useState({});
   const [newMessage, setNewMessage] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [isSending, setIsSending] = useState(false);
+  const [loadError, setLoadError] = useState('');
+  const [messagesLoading, setMessagesLoading] = useState(false);
   const [sendError, setSendError] = useState('');
   const [reportOpen, setReportOpen] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -31,8 +36,14 @@ export default function Chat() {
   const { user } = useAuth();
   const location = useLocation();
   const preselectedUserId = location.state?.selectedUserId;
+  const listingContext = location.state?.listingContext;
   const typingTimeoutRef = useRef(null);
   const messagesEndRef = useRef(null);
+  const selectedUserRef = useRef(null);
+
+  useEffect(() => {
+    selectedUserRef.current = selectedUser;
+  }, [selectedUser]);
 
   useEffect(() => {
     const newSocket = io(SOCKET_URL, { path: '/socket.io/', auth: { token: getAccessToken() } });
@@ -42,10 +53,10 @@ export default function Chat() {
     newSocket.on('receiveMessage', (message) => {
       const senderId = message.sender?._id || message.sender?.id || message.senderId;
       if (senderId) {
-        setChatPreview((prev) => ({ ...prev, [senderId]: message.text }));
+        setChatPreview((prev) => ({ ...prev, [senderId]: { text: message.text, createdAt: message.createdAt } }));
       }
 
-      if (selectedUser && senderId === selectedUser._id) {
+      if (selectedUserRef.current && senderId === selectedUserRef.current._id) {
         setMessages((prev) => [...prev, message]);
       } else if (senderId) {
         setUnreadByUser((prev) => ({ ...prev, [senderId]: (prev[senderId] || 0) + 1 }));
@@ -61,7 +72,7 @@ export default function Chat() {
     });
 
     return () => newSocket.close();
-  }, [user?.id, selectedUser?._id]);
+  }, [user?.id]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -77,15 +88,16 @@ export default function Chat() {
               const chat = res.data.data || [];
               const last = chat.at(-1);
               setChatAccessByUser((prev) => ({ ...prev, [u._id]: res.data.chatAccess }));
-              return [u._id, last?.text || 'Start a conversation'];
+              return [u._id, { text: last?.text || 'Start a conversation', createdAt: last?.createdAt || null }];
             } catch {
-              return [u._id, 'Start a conversation'];
+              return [u._id, { text: 'Start a conversation', createdAt: null }];
             }
           })
         );
         setChatPreview(Object.fromEntries(previewEntries));
       } catch (error) {
         console.error('Failed to fetch users:', error);
+        setLoadError(error.userMessage || 'Could not load conversations. Please try again.');
       } finally {
         setLoading(false);
       }
@@ -104,8 +116,13 @@ export default function Chat() {
   }, [preselectedUserId, users, selectedUser]);
 
   useEffect(() => {
+    if (listingContext?.draft && preselectedUserId && selectedUser?._id === preselectedUserId) setNewMessage((current) => current || listingContext.draft);
+  }, [listingContext, preselectedUserId, selectedUser?._id]);
+
+  useEffect(() => {
     const loadMessages = async () => {
       if (!selectedUser) return;
+      setMessagesLoading(true);
       try {
         const response = await messageAPI.getChat(selectedUser._id);
         setMessages(response.data.data || []);
@@ -114,6 +131,9 @@ export default function Chat() {
         setSendError('');
       } catch (error) {
         console.error('Failed to load messages:', error);
+        setSendError(error.userMessage || 'Could not load this conversation.');
+      } finally {
+        setMessagesLoading(false);
       }
     };
     loadMessages();
@@ -132,16 +152,17 @@ export default function Chat() {
   const canSendToSelected = !selectedUser || selectedChatAccess?.canSend !== false;
 
   const sortedUsers = useMemo(() => {
-    return [...users].sort((a, b) => {
+    const normalizedQuery = searchQuery.trim().toLowerCase();
+    return users.filter((candidate) => !normalizedQuery || candidate.name?.toLowerCase().includes(normalizedQuery)).sort((a, b) => {
       const unreadDiff = (unreadByUser[b._id] || 0) - (unreadByUser[a._id] || 0);
       if (unreadDiff) return unreadDiff;
       const connectedDiff = Number(Boolean(b.isConnected)) - Number(Boolean(a.isConnected));
       if (connectedDiff) return connectedDiff;
-      const aHasPreview = chatPreview[a._id] && chatPreview[a._id] !== 'Start a conversation';
-      const bHasPreview = chatPreview[b._id] && chatPreview[b._id] !== 'Start a conversation';
+      const aHasPreview = chatPreview[a._id]?.text && chatPreview[a._id].text !== 'Start a conversation';
+      const bHasPreview = chatPreview[b._id]?.text && chatPreview[b._id].text !== 'Start a conversation';
       return Number(bHasPreview) - Number(aHasPreview);
     });
-  }, [users, unreadByUser, chatPreview]);
+  }, [users, unreadByUser, chatPreview, searchQuery]);
 
   const sendTyping = (isTyping) => {
     if (!socket || !selectedUser) return;
@@ -157,16 +178,17 @@ export default function Chat() {
 
   const handleSendMessage = async (e) => {
     e.preventDefault();
-    if (!newMessage.trim() || !selectedUser) return;
+    if (!newMessage.trim() || !selectedUser || isSending) return;
     if (!canSendToSelected) {
       setSendError('Send a connection request to continue this chat.');
       return;
     }
+    setIsSending(true);
     try {
       const response = await messageAPI.send({ receiverId: selectedUser._id, text: newMessage });
       const message = response.data.data;
       setMessages((prev) => [...prev, message]);
-      setChatPreview((prev) => ({ ...prev, [selectedUser._id]: message.text }));
+      setChatPreview((prev) => ({ ...prev, [selectedUser._id]: { text: message.text, createdAt: message.createdAt } }));
       setChatAccessByUser((prev) => ({ ...prev, [selectedUser._id]: response.data.chatAccess }));
       setNewMessage('');
       setSendError('');
@@ -174,32 +196,26 @@ export default function Chat() {
     } catch (error) {
       setSendError(error.userMessage || 'Failed to send message');
       console.error('Failed to send message:', error);
+    } finally {
+      setIsSending(false);
     }
   };
 
   return (
     <PageTransition>
       <Layout>
-        <div className="min-h-screen py-4 sm:py-8 lg:py-10">
+        <div className="py-4 sm:py-8 lg:py-10">
           <div className="section-container space-y-4 sm:space-y-6">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+            <header className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
               <div>
-                <p className="chip mb-3">Realtime messaging</p>
-                {/* <h1 className="text-2xl font-black tracking-tight text-black dark:text-white sm:text-4xl">Campus Chat</h1> */}
-   <h1 className="text-2xl font-black tracking-tight text-indigo-500 sm:text-4xl">
-  Campus Chat
-</h1>
+                <p className="mb-2 text-sm font-semibold text-blue-700 dark:text-blue-300">Realtime messaging</p>
+                <h1 className="text-section-title">Campus Chat</h1>
               </div>
-              {/* <p className="max-w-xl text-sm leading-relaxed text-slate-500 dark:text-slate-300">
-                Clear, direct conversations for campus exchanges, borrowing, notes, and connection follow-ups.
-              </p> */}
-<p className="max-w-xl text-sm leading-relaxed text-indigo-500">
-  Clear, direct conversations for campus exchanges, borrowing, notes, and connection follow-ups.
-</p>
-            </div>
+              <p className="max-w-xl text-body-sm">Clear, direct conversations for campus exchanges, borrowing, notes, and connection follow-ups.</p>
+            </header>
 
-            <div className="grid min-h-[calc(100vh-170px)] gap-4 lg:grid-cols-[340px_minmax(0,1fr)] lg:gap-6">
-              <PremiumCard className={`${showMobileList ? 'flex' : 'hidden'} min-h-[calc(100vh-190px)] flex-col overflow-hidden border-slate-200/80 bg-slate-50 p-3 dark:border-slate-700/50 dark:bg-slate-900/90 sm:p-4 lg:flex lg:min-h-[72vh] shadow-md`} hover={false}>
+            <div className="grid h-[calc(100dvh-9rem)] min-h-[34rem] max-h-[52rem] gap-4 lg:grid-cols-[320px_minmax(0,1fr)] lg:gap-5">
+              <PremiumCard className={`${showMobileList ? 'flex' : 'hidden'} min-h-0 flex-col overflow-hidden bg-white p-3 dark:bg-slate-900 sm:p-4 lg:flex`} hover={false}>
                 <div className="mb-3 flex items-center justify-between gap-3">
                   <div>
                     <p className="text-sm font-black text-slate-950 dark:text-white">Conversations</p>
@@ -208,11 +224,16 @@ export default function Chat() {
                   <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">Live</span>
                 </div>
                 <div className="mb-3">
-                  <input className="premium-surface w-full px-3 py-3 text-sm text-slate-900 placeholder:text-slate-400 dark:text-white" placeholder="Search chats" />
+                  <label htmlFor="conversation-search" className="sr-only">Search conversations</label>
+                  <input id="conversation-search" type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="form-control" placeholder="Search conversations" />
                 </div>
                 <div className="flex-1 overflow-y-auto space-y-2 pr-1">
                   {loading ? (
                     Array.from({ length: 6 }).map((_, i) => <div key={i} className="skeleton h-14" />)
+                  ) : loadError ? (
+                    <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/30 dark:text-rose-200">{loadError}</div>
+                  ) : sortedUsers.length === 0 ? (
+                    <p className="p-4 text-center text-sm text-slate-500">No conversations match your search.</p>
                   ) : (
                     sortedUsers.map((u) => (
                       <button
@@ -221,10 +242,10 @@ export default function Chat() {
                           setSelectedUser(u);
                           setShowMobileList(false);
                         }}
-                        className={`w-full rounded-lg border p-3 text-left transition ${selectedUser?._id === u._id ? 'border-blue-300 bg-blue-50 text-slate-950 shadow-md dark:border-blue-400/40 dark:bg-blue-950/30 dark:text-white' : 'border-slate-200/70 bg-white text-slate-950 hover:border-slate-300 hover:bg-slate-100/50 dark:border-slate-700 dark:bg-slate-800/70 dark:text-white dark:hover:bg-slate-800'}`}
+                        className={`w-full rounded-lg border p-3 text-left ${getConversationClasses(selectedUser?._id === u._id)}`}
                       >
                         <div className="flex items-center gap-3">
-                          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-500 via-blue-600 to-slate-900 font-black text-white">
+                          <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600 font-bold text-white">
                             {getInitials(u.name)}
                             {onlineMap[u._id] && <span className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" />}
                           </div>
@@ -236,7 +257,7 @@ export default function Chat() {
                                 {(unreadByUser[u._id] || 0) > 0 && <span className="text-[10px] font-bold bg-rose-500 text-white px-1.5 py-0.5 rounded-full">{unreadByUser[u._id]}</span>}
                               </div>
                             </div>
-                            <p className="truncate text-xs text-slate-600 dark:text-slate-400">{chatPreview[u._id] || 'Start a conversation'}</p>
+                              <p className="truncate text-xs text-slate-600 dark:text-slate-400">{chatPreview[u._id]?.text || 'Start a conversation'}</p>
                           </div>
                         </div>
                       </button>
@@ -245,38 +266,39 @@ export default function Chat() {
                 </div>
               </PremiumCard>
 
-              <PremiumCard className={`${selectedUser || !showMobileList ? 'flex' : 'hidden'} min-h-[calc(100vh-190px)] flex-col overflow-hidden border-slate-200/80 bg-slate-50 p-0 dark:border-slate-700/50 dark:bg-slate-900/90 lg:flex lg:min-h-[72vh] shadow-md`} hover={false}>
+              <PremiumCard className={`${selectedUser || !showMobileList ? 'flex' : 'hidden'} min-h-0 flex-col overflow-hidden bg-white p-0 dark:bg-slate-900 lg:flex`} hover={false}>
                 {!selectedUser ? (
                   <div className="grid flex-1 place-items-center p-8 text-center text-slate-500">
                     <div>
                       <p className="text-lg font-bold text-slate-800 dark:text-slate-100">Select a conversation</p>
                       <p className="mt-2 text-sm text-slate-500 dark:text-slate-400">Choose a student from the list to start chatting.</p>
-                      <button className="mt-5 rounded-lg bg-slate-950 px-4 py-2 text-sm font-bold text-white lg:hidden" onClick={() => setShowMobileList(true)}>Open conversations</button>
+                      <button className="mt-5 rounded-lg bg-blue-600 px-4 py-2 text-sm font-bold text-white hover:bg-blue-700 lg:hidden" onClick={() => setShowMobileList(true)}>Open conversations</button>
                     </div>
                   </div>
                 ) : (
                   <>
-                    <div className="flex items-center gap-3 border-b border-slate-300/50 bg-slate-950 px-3 py-3 text-white dark:border-slate-700/50 dark:bg-slate-900 sm:px-5 sm:py-4 shadow-md">
-                      <button className="rounded-lg border border-white/15 px-3 py-2 text-sm font-bold lg:hidden" onClick={() => setShowMobileList(true)}>Back</button>
-                      <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-teal-400 via-blue-500 to-amber-400 font-black text-slate-950">
+                    <div className="flex items-center gap-3 border-b border-slate-200 bg-white px-3 py-3 text-slate-950 dark:border-slate-700 dark:bg-slate-900 dark:text-white sm:px-5 sm:py-4">
+                      <button className="rounded-lg border border-slate-300 px-3 py-2 text-sm font-bold dark:border-slate-600 lg:hidden" onClick={() => setShowMobileList(true)} aria-label="Back to conversations">Back</button>
+                      <div className="relative flex h-11 w-11 shrink-0 items-center justify-center rounded-lg bg-blue-600 font-bold text-white">
                         {getInitials(selectedUser.name)}
                         {onlineMap[selectedUser._id] && <span className="absolute -bottom-1 -right-1 w-3 h-3 rounded-full bg-emerald-500 border-2 border-white dark:border-slate-900" />}
                       </div>
                       <div className="min-w-0 flex-1">
-                        <p className="truncate font-bold text-white dark:text-white">{selectedUser.name}</p>
-                        <p className="text-xs text-slate-200 dark:text-slate-400">
+                        <p className="truncate font-bold">{selectedUser.name}</p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400">
                           {selectedUser.isConnected ? 'Trusted connection - unlimited chat' : 'Not connected - one starter message only'}
                         </p>
                       </div>
                       <Button size="sm" variant="danger" className="shrink-0" onClick={() => setReportOpen(true)}>Report</Button>
                     </div>
 
-                    <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 px-3 py-4 dark:bg-slate-900/80 sm:px-5">
-                      {messages.map((msg, i) => {
+                    {listingContext?.listingId && selectedUser._id === preselectedUserId && <div className="border-b border-blue-200 bg-blue-50 px-4 py-3 text-sm text-blue-900">Regarding <strong>{listingContext.title}</strong> · <Link to={`/listings/${listingContext.listingId}`} className="underline">View listing</Link></div>}
+                    <div className="flex-1 space-y-3 overflow-y-auto bg-slate-50 px-3 py-4 dark:bg-slate-950 sm:px-5" aria-live="polite">
+                      {messagesLoading ? <div className="grid h-full place-items-center text-sm text-slate-500">Loading messages…</div> : messages.length === 0 ? <div className="grid h-full place-items-center text-center text-sm text-slate-500">No messages yet. Start the conversation when you are ready.</div> : messages.map((msg, i) => {
                         const own = (msg.sender?._id || msg.sender?.id) === user?.id;
                         return (
                           <motion.div key={`${msg.createdAt || i}-${i}`} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={`flex ${own ? 'justify-end' : 'justify-start'}`}>
-                            <div className={`max-w-[88%] break-words rounded-2xl px-4 py-2.5 shadow-sm sm:max-w-[76%] ${own ? 'rounded-br-md bg-slate-950 text-white dark:bg-blue-700 dark:text-white' : 'rounded-bl-md border border-slate-300 bg-white text-slate-950 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-100'}`}>
+                            <div className={`max-w-[88%] break-words rounded-2xl px-4 py-2.5 shadow-sm sm:max-w-[76%] ${getMessageBubbleClasses(own)}`}>
                               <p className="whitespace-pre-wrap text-sm leading-relaxed">{msg.text}</p>
                               <p className={`mt-1 text-[10px] ${own ? 'text-white/80' : 'text-slate-500 dark:text-slate-300'}`}>
                                 {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
@@ -299,16 +321,19 @@ export default function Chat() {
                         {sendError}
                       </div>
                     )}
-                    <form onSubmit={handleSendMessage} className="flex gap-2 border-t border-slate-300/50 bg-slate-50 p-3 dark:border-slate-700/50 dark:bg-slate-900 sm:gap-3 sm:p-4 shadow-md">
+                    <form onSubmit={handleSendMessage} className="flex gap-2 border-t border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900 sm:gap-3 sm:p-4">
+                      <label htmlFor="chat-message" className="sr-only">Message to {selectedUser.name}</label>
                       <input
+                        id="chat-message"
                         type="text"
                         value={newMessage}
                         onChange={(e) => onMessageChange(e.target.value)}
                         disabled={!canSendToSelected}
+                        maxLength={2000}
                         placeholder={canSendToSelected ? 'Write a message' : 'Connect to continue chatting'}
-                        className="premium-surface min-w-0 flex-1 px-4 py-3 text-slate-950 placeholder:text-slate-500 dark:placeholder:text-slate-400 dark:text-white bg-slate-50 dark:bg-slate-900"
+                        className="form-control min-w-0 flex-1"
                       />
-                      <Button variant="gradient" type="submit" disabled={!canSendToSelected} className="shrink-0 disabled:cursor-not-allowed disabled:opacity-60">Send</Button>
+                      <Button variant="primary" type="submit" disabled={!canSendToSelected || isSending || !newMessage.trim()} className="shrink-0">{isSending ? 'Sending…' : 'Send'}</Button>
                     </form>
 
                     <ReportDialog
