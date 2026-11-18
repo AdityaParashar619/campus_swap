@@ -9,7 +9,9 @@ Production startup requires:
 - `OTP_PEPPER` with at least 32 characters, independently generated and different from `JWT_SECRET`.
 - `OTP_MOCK_ENABLED=false`.
 - `RESEND_API_KEY` and `EMAIL_FROM` after the sending domain has been verified.
-- `RESEND_DOMAIN_VERIFIED=true` only after checking verified DNS status in Resend. Keep the gate false while verification is pending; email endpoints remain safely unavailable.
+- `RESEND_DOMAIN_VERIFIED=true` only after checking verified DNS status in Resend. Production startup now fails closed while verification is incomplete.
+- An explicit authenticated `MONGO_URI` with a non-test database name.
+- Complete backend-only Cloudinary credentials.
 - One or more HTTPS origin values in `FRONTEND_URL` (comma-separated origins, no paths).
 - `TRUST_PROXY_HOPS` set to the exact ingress chain length. Do not set it to `true` or guess. The backend must not be directly exposed around that ingress.
 - Institutional email/enrollment patterns, allowed domains, and branches appropriate to the institution.
@@ -34,7 +36,7 @@ Start only after validation and verified secrets/provider configuration:
 docker compose --env-file .env.production -f docker-compose.yml -f docker-compose.production.yml up --build -d
 ```
 
-The production overlay explicitly disables mock OTP, sets production mode, passes Resend configuration, and requires the HTTPS frontend origin and trusted proxy hop count. It leaves MongoDB data in the named volume; do not remove the volume during deployment. With `RESEND_DOMAIN_VERIFIED=false`, the application can start but its email delivery calls return unavailable until the domain is verified and credentials are set.
+The production overlay explicitly disables mock OTP, sets production mode, requires a production MongoDB URI and Cloudinary configuration, passes email configuration, and requires the HTTPS frontend origin and trusted proxy hop count. It leaves MongoDB data untouched; do not remove any volume during deployment. Production will not start with unverified Resend delivery.
 
 ## Email provider contract
 
@@ -75,4 +77,4 @@ Before deploying to an existing database, inspect actual indexes and duplicate d
 5. Inspect production Mongo indexes before enabling signup.
 6. Verify provider delivery and the password-change confirmation template with a non-production provider account.
 
-`docker compose config --quiet` passed during remediation. Docker Engine was unavailable (`npipe:////./pipe/dockerDesktopLinuxEngine` missing), so container startup/health, deployed proxy behavior and production database access were not verified. The staging/runtime checks above remain required before release; current status is NO-GO.
+Local development Docker health has been verified. Production TLS, authenticated database access, email delivery, Cloudinary operations, off-host backup restoration, and external monitoring still require Stage B verification; current production status remains NO-GO.

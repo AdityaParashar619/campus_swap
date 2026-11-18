@@ -1,7 +1,35 @@
 services:
+  mongodb:
+    init: true
+    stop_grace_period: 30s
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:?Set production Mongo root username}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?Set production Mongo root password}
+      MONGO_APP_USERNAME: ${MONGO_APP_USERNAME:?Set production Mongo application username}
+      MONGO_APP_PASSWORD: ${MONGO_APP_PASSWORD:?Set production Mongo application password}
+      MONGO_APP_DATABASE: campusswap
+    volumes:
+      - ./ops/mongo-init.js:/docker-entrypoint-initdb.d/10-campusswap-user.js:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
   backend:
+    init: true
+    stop_grace_period: 20s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
     environment:
       NODE_ENV: production
+      MONGO_URI: ${MONGO_URI:?Set an authenticated production MongoDB URI with an explicit database}
       JWT_SECRET: ${JWT_SECRET:?Set JWT_SECRET in .env.production}
       OTP_PEPPER: ${OTP_PEPPER:?Set independent OTP_PEPPER in .env.production}
       OTP_MOCK_ENABLED: "false"
@@ -19,14 +47,29 @@ services:
       INSTITUTION_EMAIL_PATTERN: ${INSTITUTION_EMAIL_PATTERN:?Set institutional email pattern}
       ENROLLMENT_PATTERN: ${ENROLLMENT_PATTERN:?Set enrollment pattern}
       INSTITUTION_BRANCHES: ${INSTITUTION_BRANCHES:?Set allowed branches}
-      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
-      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
-      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:?Set Cloudinary cloud name}
+      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:?Set backend-only Cloudinary API key}
+      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:?Set backend-only Cloudinary API secret}
       PRODUCT_IMAGE_MAX_COUNT: ${PRODUCT_IMAGE_MAX_COUNT:-5}
       PRODUCT_IMAGE_MAX_SIZE_MB: ${PRODUCT_IMAGE_MAX_SIZE_MB:-5}
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
   frontend:
+    init: true
+    stop_grace_period: 10s
+    security_opt:
+      - no-new-privileges:true
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
     build:
       args:
         VITE_API_BASE_URL: /api
     ports:
-      - "${FRONTEND_PORT:-8080}:80"
+      - "127.0.0.1:${FRONTEND_PORT:-8080}:80"

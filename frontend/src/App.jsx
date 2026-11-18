@@ -2,6 +2,7 @@ import { lazy, Suspense } from 'react';
 import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
+import { NotificationProvider } from './context/NotificationContext';
 import { PageLoader } from './components/ui';
 import { useAuth } from './hooks/useAuth';
 
@@ -25,6 +26,7 @@ const Notes = lazy(() => import('./pages/Notes'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const Profile = lazy(() => import('./pages/Profile'));
+const StudentProfile = lazy(() => import('./pages/StudentProfile'));
 const ResetPassword = lazy(() => import('./pages/ResetPassword'));
 const Signup = lazy(() => import('./pages/Signup'));
 const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
@@ -73,6 +75,7 @@ function AppContent() {
           <Route path="/about" element={<ProtectedRoute><About /></ProtectedRoute>} />
           <Route path="/feedback" element={<ProtectedRoute><Feedback /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+          <Route path="/students/:id" element={<ProtectedRoute><StudentProfile /></ProtectedRoute>} />
           <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
           <Route path="/admin/users" element={<AdminRoute iam><AdminUsers /></AdminRoute>} />
           <Route path="/error" element={<Error />} />
@@ -87,7 +90,7 @@ export default function App() {
   return (
     <AuthProvider>
       <ToastProvider>
-        <AppContent />
+        <NotificationProvider><AppContent /></NotificationProvider>
       </ToastProvider>
     </AuthProvider>
   );

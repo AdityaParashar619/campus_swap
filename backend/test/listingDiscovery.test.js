@@ -75,6 +75,7 @@ test('controller applies discovery before pagination and returns complete metada
     sort(value) { observed.sort = value; return this; },
     skip(value) { observed.skip = value; return this; },
     limit(value) { observed.limit = value; return this; },
+    lean() { observed.lean = true; return this; },
     then(resolve, reject) { observed.filter = filter; return Promise.resolve([]).then(resolve, reject); }
   });
   Listing.countDocuments = async (filter) => { observed.countFilter = filter; return 13; };
@@ -84,6 +85,7 @@ test('controller applies discovery before pagination and returns complete metada
     assert.deepEqual(observed.filter, observed.countFilter);
     assert.deepEqual(observed.sort, { price: -1, _id: -1 });
     assert.deepEqual({ skip: observed.skip, limit: observed.limit }, { skip: 12, limit: 6 });
+    assert.equal(observed.lean, true);
     assert.deepEqual(res.body.data, []);
     assert.deepEqual(res.body.pagination, { page: 3, limit: 6, total: 13, totalPages: 3, hasNextPage: false, hasPreviousPage: true });
   } finally { Listing.find = originals.find; Listing.countDocuments = originals.count; }

@@ -59,3 +59,24 @@ export const productImageUploadLimiter = rateLimit({
   keyGenerator: (req) => req.user?.userId || req.ip,
   message: { success: false, message: 'Too many image uploads. Try again later.' }
 });
+
+const userRateLimit = ({ windowMs, max, message }) => rateLimit({
+  windowMs,
+  max,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => req.user?.userId || req.ip,
+  message: { success: false, message }
+});
+
+export const messageSendLimiter = userRateLimit({
+  windowMs: 60 * 1000,
+  max: 30,
+  message: 'Too many messages. Please wait before sending more.'
+});
+
+export const creationLimiter = userRateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  message: 'Too many creation requests. Please try again later.'
+});

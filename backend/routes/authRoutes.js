@@ -12,6 +12,7 @@ import {
   resendStudentOtp,
   resetPassword,
   updatePassword,
+  updateAvatar,
   updateProfile,
   verifyAlumniEmail,
   verifyPasswordResetOtp,
@@ -19,8 +20,9 @@ import {
 } from '../controllers/authController.js';
 import { authMiddleware } from '../middleware/authMiddleware.js';
 import { validateAuthPayload, validateBody, validatePasswordResetPayload } from '../middleware/validateMiddleware.js';
-import { authAccountAttemptLimiter, authAttemptLimiter, refreshAttemptLimiter } from '../middleware/securityMiddleware.js';
+import { authAccountAttemptLimiter, authAttemptLimiter, productImageUploadLimiter, refreshAttemptLimiter } from '../middleware/securityMiddleware.js';
 import { env } from '../config/env.js';
+import { avatarUploadMiddleware } from '../middleware/avatarUploadMiddleware.js';
 
 const requireTrustedOrigin = (req, res, next) => {
   const origin = req.get('origin');
@@ -48,6 +50,7 @@ router.post('/dev-mail-preview', authAttemptLimiter, validateBody(['previewToken
 router.get('/users', authMiddleware, getAllUsers);
 router.get('/me', authMiddleware, getMe);
 router.patch('/me', authMiddleware, updateProfile);
+router.post('/me/avatar', authMiddleware, productImageUploadLimiter, avatarUploadMiddleware, updateAvatar);
 router.patch('/me/password', authMiddleware, updatePassword);
 
 export default router;

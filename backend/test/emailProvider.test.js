@@ -201,7 +201,11 @@ const loadEnvironment = (overrides = {}) => spawnSync(process.execPath, ['--inpu
     OTP_PEPPER: 'p'.repeat(64),
     TRUST_PROXY_HOPS: '1',
     FRONTEND_URL: 'https://web.example',
-    RESEND_DOMAIN_VERIFIED: 'false',
+    MONGO_URI: 'mongodb://database.example:27017/campusswap',
+    CLOUDINARY_CLOUD_NAME: 'test-cloud',
+    CLOUDINARY_API_KEY: 'test-key',
+    CLOUDINARY_API_SECRET: 'test-secret',
+    RESEND_DOMAIN_VERIFIED: 'true',
     RESEND_TEST_MODE: 'false',
     EMAIL_PROVIDER: 'resend',
     GMAIL_USER: '',
@@ -212,9 +216,10 @@ const loadEnvironment = (overrides = {}) => spawnSync(process.execPath, ['--inpu
   }
 });
 
-test('production can start with unverified sending disabled, and verified sending requires a non-onboarding sender', () => {
-  const pendingDns = loadEnvironment({ RESEND_API_KEY: TEST_API_KEY, EMAIL_FROM: 'CampusSwap <no-reply@satiengg.in>' });
-  assert.equal(pendingDns.status, 0, pendingDns.stderr);
+test('production fails closed until Resend DNS and sender configuration are verified', () => {
+  const pendingDns = loadEnvironment({ RESEND_DOMAIN_VERIFIED: 'false', RESEND_API_KEY: TEST_API_KEY, EMAIL_FROM: 'CampusSwap <no-reply@satiengg.in>' });
+  assert.notEqual(pendingDns.status, 0);
+  assert.match(pendingDns.stderr, /RESEND_DOMAIN_VERIFIED=true/);
 
   const missingConfig = loadEnvironment({ RESEND_DOMAIN_VERIFIED: 'true' });
   assert.notEqual(missingConfig.status, 0);
@@ -226,6 +231,20 @@ test('production can start with unverified sending disabled, and verified sendin
 
   const verifiedSender = loadEnvironment({ RESEND_DOMAIN_VERIFIED: 'true', RESEND_API_KEY: TEST_API_KEY, EMAIL_FROM: 'CampusSwap <no-reply@satiengg.in>' });
   assert.equal(verifiedSender.status, 0, verifiedSender.stderr);
+});
+
+test('production requires an explicit database and complete Cloudinary configuration', () => {
+  const missingDatabase = loadEnvironment({ MONGO_URI: '', RESEND_API_KEY: TEST_API_KEY, EMAIL_FROM: 'CampusSwap <no-reply@satiengg.in>' });
+  assert.notEqual(missingDatabase.status, 0);
+  assert.match(missingDatabase.stderr, /explicit MONGO_URI/);
+
+  const testDatabase = loadEnvironment({ MONGO_URI: 'mongodb://database.example:27017/campusswap_test', RESEND_API_KEY: TEST_API_KEY, EMAIL_FROM: 'CampusSwap <no-reply@satiengg.in>' });
+  assert.notEqual(testDatabase.status, 0);
+  assert.match(testDatabase.stderr, /non-test database name/);
+
+  const missingCloudinary = loadEnvironment({ CLOUDINARY_API_SECRET: '', RESEND_API_KEY: TEST_API_KEY, EMAIL_FROM: 'CampusSwap <no-reply@satiengg.in>' });
+  assert.notEqual(missingCloudinary.status, 0);
+  assert.match(missingCloudinary.stderr, /Cloudinary credentials/);
 });
 
 test('Resend onboarding test configuration is restricted to development and permitted sender/recipient values', () => {

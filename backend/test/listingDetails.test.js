@@ -9,7 +9,7 @@ const invoke = (handler, req) => new Promise((resolve) => {
   const res = { status(code) { this.statusCode = code; return this; }, json(body) { this.body = body; resolve({ res: this }); } };
   handler(req, res, (error) => resolve({ res, error }));
 });
-const query = (value) => ({ populate() { return this; }, sort() { return this; }, skip() { return this; }, limit() { return this; }, then(resolve, reject) { return Promise.resolve(value).then(resolve, reject); } });
+const query = (value) => ({ populate() { return this; }, sort() { return this; }, skip() { return this; }, limit() { return this; }, lean() { return this; }, then(resolve, reject) { return Promise.resolve(value).then(resolve, reject); } });
 
 test('product details reject malformed IDs before querying MongoDB', { concurrency: false }, async () => {
   const original = Listing.findOne; let queried = false; Listing.findOne = () => { queried = true; };

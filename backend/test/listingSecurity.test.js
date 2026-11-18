@@ -185,15 +185,16 @@ test('owner deletion removes saved listing references after deleting the listing
 
 const fakeQuery = (items) => ({
   populate() { return this; }, sort() { return this; }, skip() { return this; }, limit() { return this; },
+  lean() { return this; },
   then(resolve, reject) { return Promise.resolve(items).then(resolve, reject); }
 });
 
 test('anonymous listing and bounty feeds omit email and contact fields', { concurrency: false }, async () => {
   const originals = { listingFind: Listing.find, listingCount: Listing.countDocuments, bountyFind: Bounty.find, bountyCount: Bounty.countDocuments };
-  const doc = { toObject: () => ({ title: 'item', user: { name: 'Campus user', email: 'private@satiengg.in', phoneNumber: '123', whatsappNumber: '456', contactVisibility: 'connections' } }) };
-  Listing.find = () => fakeQuery([doc]);
+  const data = { title: 'item', user: { name: 'Campus user', email: 'private@satiengg.in', phoneNumber: '123', whatsappNumber: '456', contactVisibility: 'connections' } };
+  Listing.find = () => fakeQuery([data]);
   Listing.countDocuments = async () => 1;
-  Bounty.find = () => fakeQuery([doc]);
+  Bounty.find = () => fakeQuery([{ toObject: () => data }]);
   Bounty.countDocuments = async () => 1;
   try {
     const listings = await invoke(getListings, { query: {} });

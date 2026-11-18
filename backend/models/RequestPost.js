@@ -2,11 +2,11 @@ import mongoose from 'mongoose';
 
 const requestSchema = new mongoose.Schema(
   {
-    title: { type: String, required: true, trim: true },
-    description: { type: String, default: '', trim: true },
-    category: { type: String, default: 'General', trim: true },
+    title: { type: String, required: true, trim: true, maxlength: 120 },
+    description: { type: String, default: '', trim: true, maxlength: 1000 },
+    category: { type: String, default: 'General', trim: true, maxlength: 30 },
     neededBy: { type: Date, default: null },
-    location: { type: String, default: '', trim: true },
+    location: { type: String, default: '', trim: true, maxlength: 120 },
     status: { type: String, enum: ['open', 'fulfilled', 'closed'], default: 'open' },
     fulfilledBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
     responses: [

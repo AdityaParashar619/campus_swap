@@ -5,10 +5,12 @@ export const AuthContext = createContext();
 
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
+  const [profileStats, setProfileStats] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  const applyProfile = (profile) => {
+  const applyProfile = (profile, stats) => {
     setUser(profile);
+    if (stats !== undefined) setProfileStats(stats);
     localStorage.setItem('user', JSON.stringify(profile));
   };
 
@@ -23,12 +25,14 @@ export const AuthProvider = ({ children }) => {
         const restored = response?.data?.data || session.data.user || null;
         if (mounted) {
           setUser(restored);
+          setProfileStats(response?.data?.stats || null);
           if (restored) localStorage.setItem('user', JSON.stringify(restored));
         }
       } catch {
         localStorage.removeItem('user');
         setAccessToken(null);
         if (mounted) setUser(null);
+        if (mounted) setProfileStats(null);
       }
 
       if (mounted) setLoading(false);
@@ -42,6 +46,7 @@ export const AuthProvider = ({ children }) => {
 
   const login = (userData, token) => {
     setAccessToken(token);
+    setProfileStats(null);
     applyProfile(userData);
   };
 
@@ -50,6 +55,7 @@ export const AuthProvider = ({ children }) => {
     setAccessToken(null);
     localStorage.removeItem('user');
     setUser(null);
+    setProfileStats(null);
   };
 
   useEffect(() => {
@@ -57,10 +63,11 @@ export const AuthProvider = ({ children }) => {
       setAccessToken(null);
       localStorage.removeItem('user');
       setUser(null);
+      setProfileStats(null);
     };
     window.addEventListener('campusswap:session-expired', expire);
     return () => window.removeEventListener('campusswap:session-expired', expire);
   }, []);
 
-  return <AuthContext.Provider value={{ user, login, logout, loading, applyProfile }}>{children}</AuthContext.Provider>;
+  return <AuthContext.Provider value={{ user, profileStats, login, logout, loading, applyProfile }}>{children}</AuthContext.Provider>;
 };

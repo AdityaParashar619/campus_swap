@@ -80,9 +80,13 @@ export const authAPI = {
   verifyPasswordResetOtp: (data) => API.post('/auth/verify-reset-otp', data),
   resetPassword: (data) => API.post('/auth/reset-password', data),
   previewDevelopmentMail: (previewToken) => API.post('/auth/dev-mail-preview', { previewToken }),
-  getUsers: () => API.get('/auth/users'),
+  getUsers: (config) => API.get('/auth/users', config),
   getMe: () => API.get('/auth/me'),
-  updateMe: (data) => API.patch('/auth/me', data)
+  updateMe: (data) => API.patch('/auth/me', data),
+  uploadAvatar: (file) => {
+    const data = new FormData(); data.append('avatar', file);
+    return API.post('/auth/me/avatar', data, { timeout: 60000 });
+  }
 };
 
 export const listingAPI = {
@@ -106,7 +110,7 @@ export const listingAPI = {
 };
 
 export const requestAPI = {
-  getAll: () => API.get('/requests'),
+  getAll: (params, config) => API.get('/requests', { ...config, params }),
   create: (data) => API.post('/requests', data),
   respond: (id, message) => API.post(`/requests/${id}/responses`, { message }),
   updateStatus: (id, status, fulfilledBy) => API.patch(`/requests/${id}/status`, { status, fulfilledBy })
@@ -121,13 +125,16 @@ export const noteAPI = {
 export const connectionAPI = {
   getAll: () => API.get('/connections'),
   getSuggestions: () => API.get('/connections/suggestions'),
+  getStudent: (userId, config) => API.get(`/connections/students/${userId}`, config),
   create: (recipientId) => API.post('/connections', { recipientId }),
   respond: (id, status) => API.patch(`/connections/${id}/respond`, { status })
 };
 
 export const notificationAPI = {
-  getAll: () => API.get('/notifications'),
-  markRead: (id) => API.patch(`/notifications/${id}/read`)
+  getAll: (params) => API.get('/notifications', { params }),
+  getUnreadCount: () => API.get('/notifications/unread-count'),
+  markRead: (id) => API.patch(`/notifications/${id}/read`),
+  markAllRead: () => API.patch('/notifications/read-all')
 };
 
 export const reportAPI = {
@@ -154,7 +161,8 @@ export const adminAPI = {
 
 export const messageAPI = {
   send: (data) => API.post('/messages', data),
-  getChat: (userId) => API.get(`/messages/${userId}`)
+  getChat: (userId, config) => API.get(`/messages/${userId}`, config),
+  getSummaries: (params = {}, config) => API.get('/messages/summaries', { ...config, params })
 };
 
 export default API;

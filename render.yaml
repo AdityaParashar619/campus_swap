@@ -24,8 +24,14 @@ services:
         sync: false
       - key: EMAIL_FROM
         sync: false
+      - key: CLOUDINARY_CLOUD_NAME
+        sync: false
+      - key: CLOUDINARY_API_KEY
+        sync: false
+      - key: CLOUDINARY_API_SECRET
+        sync: false
       - key: RESEND_DOMAIN_VERIFIED
-        value: "false"
+        sync: false
       - key: RESEND_TEST_MODE
         value: "false"
       - key: RESEND_TEST_RECIPIENT

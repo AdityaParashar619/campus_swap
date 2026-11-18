@@ -1,7 +1,7 @@
 ﻿import { motion } from 'framer-motion';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import satiCampus from '../assets/sati-campus.png';
+import satiCampus from '../assets/sati-campus.webp';
 import satiLogo from '../assets/sati-logo.jpg';
 import { CountUp, PageTransition, Reveal, Stagger, StaggerItem } from '../components/ui';
 
@@ -94,7 +94,15 @@ export default function Landing() {
         </section>
 
         <section className="relative overflow-hidden py-20">
-          <img src={satiCampus} alt="" className="absolute inset-0 h-full w-full object-cover opacity-[0.14]" />
+          <img
+            src={satiCampus}
+            alt=""
+            width="1600"
+            height="377"
+            loading="lazy"
+            decoding="async"
+            className="absolute inset-0 h-full w-full object-cover opacity-[0.14]"
+          />
           <div className="absolute inset-0 bg-white/82 backdrop-blur-[1px] dark:bg-slate-950/86" />
           <div className="section-container relative z-10">
             <Reveal className="text-center mb-12">

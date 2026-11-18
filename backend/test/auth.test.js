@@ -303,6 +303,11 @@ test('development mock OTP completes registration and email verification without
     const verified = await verifyPromise;
     assert.equal(verified.success, true);
     assert.equal(createdUser.email, payload.email);
+    assert.equal(createdUser.name, payload.name);
+    assert.equal(createdUser.enrollmentNumber, payload.enrollmentNumber);
+    assert.equal(createdUser.branch, payload.branch);
+    assert.equal(createdUser.semester, payload.semester);
+    assert.equal(createdUser.yearSemester, payload.semester);
     assert.equal(createdUser.emailVerified, true);
   } finally {
     env.nodeEnv = originals.nodeEnv; env.emailProvider = originals.emailProvider; env.otpMockEnabled = originals.otpMockEnabled; env.resendApiKey = originals.resendApiKey; env.resendTestMode = originals.resendTestMode; env.resendTestRecipient = originals.resendTestRecipient; env.resendDomainVerified = originals.resendDomainVerified; env.emailFrom = originals.emailFrom;
@@ -429,17 +434,15 @@ test('auth middleware blocks pending alumni even after email verification', { co
   } finally { User.findById = originalFindById; }
 });
 
-test('profile update ignores protected role and enrollment fields', { concurrency: false }, async () => {
+test('profile update rejects protected role and enrollment fields', { concurrency: false }, async () => {
   const originalFindByIdAndUpdate = User.findByIdAndUpdate;
   let update;
   User.findByIdAndUpdate = async (_id, value) => { update = value; return { _id: 'u', name: 'Safe', role: 'student', email: 'student@example.edu' }; };
   try {
     const app = createApp({ databaseMiddleware: withoutDatabaseCheck });
     const { updateProfile } = await import('../controllers/authController.js');
-    const response = await new Promise((resolve) => updateProfile({ user: { userId: 'u' }, body: { name: 'Safe', role: 'super_admin', enrollmentNumber: 'takeover' } }, { json: resolve }, resolve));
-    assert.equal(update.role, undefined);
-    assert.equal(update.enrollmentNumber, undefined);
-    assert.equal(response.data.role, 'student');
+    await assert.rejects(new Promise((resolve, reject) => updateProfile({ user: { userId: 'u' }, body: { name: 'Safe', role: 'super_admin', enrollmentNumber: 'takeover' } }, { json: resolve }, reject)), /cannot be changed/i);
+    assert.equal(update, undefined);
   } finally { User.findByIdAndUpdate = originalFindByIdAndUpdate; }
 });
 
