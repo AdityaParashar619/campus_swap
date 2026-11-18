@@ -16,7 +16,7 @@ import { authMiddleware } from '../middleware/authMiddleware.js';
 import { validateBody } from '../middleware/validateMiddleware.js';
 import { deletePendingProductImage, uploadProductImages } from '../controllers/productImageController.js';
 import { productImageUploadMiddleware } from '../middleware/productImageUploadMiddleware.js';
-import { productImageUploadLimiter } from '../middleware/securityMiddleware.js';
+import { creationLimiter, productImageUploadLimiter } from '../middleware/securityMiddleware.js';
 
 const router = express.Router();
 
@@ -26,7 +26,7 @@ router.get('/saved', authMiddleware, getSavedListings);
 router.post('/favorites/status', authMiddleware, getFavoriteStatuses);
 router.post('/images', authMiddleware, productImageUploadLimiter, productImageUploadMiddleware, uploadProductImages);
 router.delete('/images/:id', authMiddleware, deletePendingProductImage);
-router.post('/', authMiddleware, validateBody(['title']), createListing);
+router.post('/', authMiddleware, creationLimiter, validateBody(['title']), createListing);
 router.get('/:id', getListingById);
 router.patch('/:id', authMiddleware, updateListing);
 router.delete('/:id', authMiddleware, deleteListing);

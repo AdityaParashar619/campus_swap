@@ -18,11 +18,15 @@ export default function Network() {
   const [students, setStudents] = useState([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState('');
+  const [loadError, setLoadError] = useState('');
+  const [busyKey, setBusyKey] = useState('');
+  const [searchQuery, setSearchQuery] = useState('');
   const { user } = useAuth();
   const currentUserId = String(user?.id || user?._id || '');
 
   const fetchNetwork = async () => {
     setLoading(true);
+    setLoadError('');
     try {
       const [connectionsResponse, suggestionsResponse] = await Promise.all([
         connectionAPI.getAll(),
@@ -31,7 +35,7 @@ export default function Network() {
       setConnections(connectionsResponse.data.data || []);
       setStudents(suggestionsResponse.data.data || []);
     } catch (error) {
-      setMessage(error.userMessage || 'Failed to load network');
+      setLoadError(error.userMessage || 'Failed to load network');
     } finally {
       setLoading(false);
     }
@@ -56,49 +60,60 @@ export default function Network() {
     [connections]
   );
 
+  const filteredStudents = useMemo(() => {
+    const query = searchQuery.trim().toLowerCase();
+    if (!query) return students;
+    return students.filter((student) => [student.name, student.course, student.collegeName, student.bio]
+      .some((value) => value?.toLowerCase().includes(query)));
+  }, [students, searchQuery]);
+
   const getOtherStudent = (connection) =>
     getId(connection.requester) === currentUserId ? connection.recipient : connection.requester;
 
   const sendRequest = async (recipientId) => {
+    if (busyKey) return;
+    setBusyKey(`student:${recipientId}`);
     setMessage('');
     try {
       await connectionAPI.create(recipientId);
       setMessage('Connection request sent');
-      fetchNetwork();
+      await fetchNetwork();
     } catch (error) {
       setMessage(error.userMessage || 'Failed to send connection request');
-    }
+    } finally { setBusyKey(''); }
   };
 
   const respondToRequest = async (connectionId, status) => {
+    if (busyKey) return;
+    setBusyKey(`connection:${connectionId}`);
     setMessage('');
     try {
       await connectionAPI.respond(connectionId, status);
       setMessage(`Connection ${status}`);
-      fetchNetwork();
+      await fetchNetwork();
     } catch (error) {
       setMessage(error.userMessage || 'Failed to update connection');
-    }
+    } finally { setBusyKey(''); }
   };
 
   const renderConnectionAction = (student) => {
     const connection = student.connection;
     if (!connection) {
-      return <Button size="sm" variant="gradient" onClick={() => sendRequest(student._id)}>Connect</Button>;
+      return <Button size="sm" variant="gradient" disabled={Boolean(busyKey)} onClick={() => sendRequest(student._id)}>{busyKey === `student:${student._id}` ? 'Sending…' : 'Connect'}</Button>;
     }
 
     if (connection.status === 'accepted') return <span className="chip">Connected</span>;
-    if (connection.direction === 'outgoing') return <span className="chip">Pending</span>;
+    if (connection.direction === 'outgoing') return <span className="chip">Request Sent</span>;
     if (connection.status === 'pending') {
       return (
         <div className="flex gap-2">
-          <Button size="sm" variant="gradient" onClick={() => respondToRequest(connection.id, 'accepted')}>Accept</Button>
-          <Button size="sm" variant="secondary" onClick={() => respondToRequest(connection.id, 'rejected')}>Reject</Button>
+          <Button size="sm" variant="gradient" disabled={Boolean(busyKey)} onClick={() => respondToRequest(connection.id, 'accepted')}>{busyKey === `connection:${connection.id}` ? 'Updating…' : 'Accept'}</Button>
+          <Button size="sm" variant="secondary" disabled={Boolean(busyKey)} onClick={() => respondToRequest(connection.id, 'rejected')}>Decline</Button>
         </div>
       );
     }
 
-    return <Button size="sm" variant="gradient" onClick={() => sendRequest(student._id)}>Connect</Button>;
+    return <Button size="sm" variant="gradient" disabled={Boolean(busyKey)} onClick={() => sendRequest(student._id)}>Connect</Button>;
   };
 
   return (
@@ -115,7 +130,7 @@ export default function Network() {
               {[
                 ['Unlimited chat', 'Continue conversations after the first starter message.'],
                 ['Trusted contacts', 'Share phone or WhatsApp only with accepted connections.'],
-                ['Priority inbox', 'Connected students stay higher in chat and network lists.'],
+                ['Visible requests', 'Review incoming and outgoing requests in one place.'],
                 ['Trust score', 'Accepted campus links improve student reputation.']
               ].map(([title, body]) => (
                 <div key={title} className="rounded-2xl border border-slate-200/70 bg-white/90 p-4 shadow-sm dark:border-slate-700/60 dark:bg-slate-900/80">
@@ -126,6 +141,7 @@ export default function Network() {
             </div>
 
             {message && <p className="rounded-lg bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700 dark:bg-blue-950/50 dark:text-blue-200 border border-blue-300/30 dark:border-blue-400/20 shadow-sm">{message}</p>}
+            {loadError && <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">{loadError} <button type="button" className="font-bold underline" onClick={fetchNetwork}>Retry</button></div>}
 
             <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
               <PremiumCard hover={false} className="border-slate-200/70 bg-white dark:border-slate-700/50 dark:bg-slate-900/90 shadow-md">
@@ -147,8 +163,8 @@ export default function Network() {
                           <p className="text-body-sm text-slate-600 dark:text-slate-300">{connection.requester?.course || 'Student'} {connection.requester?.yearSemester || ''}</p>
                         </div>
                         <div className="flex gap-2">
-                          <Button size="sm" variant="gradient" onClick={() => respondToRequest(connection._id, 'accepted')}>Accept</Button>
-                          <Button size="sm" variant="secondary" onClick={() => respondToRequest(connection._id, 'rejected')}>Reject</Button>
+                          <Button size="sm" variant="gradient" disabled={Boolean(busyKey)} onClick={() => respondToRequest(connection._id, 'accepted')}>{busyKey === `connection:${connection._id}` ? 'Updating…' : 'Accept'}</Button>
+                          <Button size="sm" variant="secondary" disabled={Boolean(busyKey)} onClick={() => respondToRequest(connection._id, 'rejected')}>Decline</Button>
                         </div>
                       </div>
                     ))}
@@ -222,6 +238,7 @@ export default function Network() {
                         >
                           Open trusted chat
                         </Link>
+                        <Link to={`/students/${getId(student)}`} className="mt-2 inline-flex w-full justify-center rounded-xl border border-slate-300 px-4 py-2 text-sm font-semibold text-slate-800 dark:border-slate-600 dark:text-slate-100">View profile</Link>
                       </PremiumCard>
                     );
                   })}
@@ -230,32 +247,32 @@ export default function Network() {
             </div>
 
             <div>
-              <h2 className="text-feature-title mb-4">Discover Students</h2>
+              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="text-feature-title">Discover Students</h2><p className="text-body-sm">Find students from the existing campus directory.</p></div><label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Search students<input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="form-control mt-1 sm:w-72" placeholder="Name, course, college" /></label></div>
               {loading ? (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
                   {[1, 2, 3, 4, 5, 6].map((item) => <div key={item} className="skeleton h-44" />)}
                 </div>
               ) : (
                 <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
-                  {students.map((student) => (
+                  {filteredStudents.map((student) => (
                     <PremiumCard key={student._id} className="flex h-full flex-col justify-between border-slate-200/70 bg-white dark:border-slate-700/50 dark:bg-slate-900/90 shadow-md">
                       <div>
                         <div className="mb-3 flex items-start justify-between gap-3">
-                          <div>
-                            <h3 className="text-feature-title text-slate-950 dark:text-white">{student.name}</h3>
+                          <div className="flex min-w-0 items-center gap-3">
+                            <div className="grid h-11 w-11 shrink-0 place-items-center overflow-hidden rounded-xl bg-blue-600 font-bold text-white">{student.profilePicture ? <img src={student.profilePicture} alt="" className="h-full w-full object-cover" /> : getInitials(student.name)}</div><div className="min-w-0"><h3 className="truncate text-feature-title text-slate-950 dark:text-white">{student.name}</h3>
                             <p className="text-body-sm text-slate-600 dark:text-slate-300">{student.course || 'Student'} {student.yearSemester || ''}</p>
-                          </div>
+                          </div></div>
                           <span className="chip bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200">{student.trustScore || 0} trust</span>
                         </div>
                         <p className="text-body-sm line-clamp-3 text-slate-700 dark:text-slate-300">{student.bio || 'No bio added yet.'}</p>
                       </div>
                       <div className="mt-5 flex items-center justify-between gap-3">
                         <span className="text-xs text-slate-500 dark:text-slate-400">{student.collegeName || 'CampusSwap'}</span>
-                        {renderConnectionAction(student)}
+                        <div className="flex flex-wrap items-center justify-end gap-2"><Link to={`/students/${student._id}`} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 dark:border-slate-600 dark:text-slate-200">Profile</Link>{renderConnectionAction(student)}</div>
                       </div>
                     </PremiumCard>
                   ))}
-                  {students.length === 0 && <PremiumCard className="border-slate-200/70 bg-white dark:border-slate-700/50 dark:bg-slate-900/90 shadow-md"><p className="text-body-sm">No other students found yet.</p></PremiumCard>}
+                  {filteredStudents.length === 0 && <PremiumCard className="border-slate-200/70 bg-white dark:border-slate-700/50 dark:bg-slate-900/90 shadow-md"><p className="text-body-sm">{searchQuery ? 'No students match your search.' : 'No other students found yet.'}</p></PremiumCard>}
                 </div>
               )}
             </div>

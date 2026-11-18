@@ -108,8 +108,12 @@ test('Mongo-backed student registration, verification, login, refresh, logout, r
     assert.equal(verification.status, 201, JSON.stringify(verificationBody));
     assert.equal(verificationBody.user.email, email);
     assert.equal(verificationBody.user.emailVerified, true);
-    const createdUser = await User.findOne({ email, emailVerified: true, accountStatus: 'active' }).select('_id');
+    const createdUser = await User.findOne({ email, emailVerified: true, accountStatus: 'active' });
     assert.ok(createdUser);
+    assert.equal(createdUser.enrollmentNumber, enrollmentNumber);
+    assert.equal(createdUser.department, 'CSE');
+    assert.equal(createdUser.branch, 'cs');
+    assert.equal(createdUser.semester, '1');
     ownedUserId = createdUser._id;
     assert.ok(await RefreshSession.exists({ user: ownedUserId, revokedAt: null }));
     assert.equal(await EmailVerification.exists({ email, kind: 'student' }), null);
@@ -282,7 +286,7 @@ test('Mongo-backed student registration, verification, login, refresh, logout, r
 
     const concurrentRoll = String((Number(roll) + 1) % 100).padStart(2, '0');
     ownedConcurrentEmail = `parallel${suffix}24cs0${concurrentRoll}@satiengg.in`;
-    const concurrentPayload = { name: 'Concurrent Registration', email: ownedConcurrentEmail, enrollmentNumber: `0108cs2410${concurrentRoll}`, department: 'Engineering', branch: 'cs', semester: '1', phoneNumber: '1234567890', password: 'Parallel-test-password-123', confirmPassword: 'Parallel-test-password-123' };
+    const concurrentPayload = { name: 'Concurrent Registration', email: ownedConcurrentEmail, enrollmentNumber: `0108cs2410${concurrentRoll}`, department: 'CSE', branch: 'cs', semester: '1', phoneNumber: '1234567890', password: 'Parallel-test-password-123', confirmPassword: 'Parallel-test-password-123' };
     resetAuthAttemptIpLimit();
     const concurrentRegistrations = await Promise.all([1, 2].map(() => fetch(`${apiUrl}/register/student`, {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(concurrentPayload)

@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
 import { Link, NavLink, useNavigate } from 'react-router-dom';
 import satiLogo from '../assets/sati-logo.jpg';
+import NotificationPanel from '../components/NotificationPanel';
+import { useNotifications } from '../context/NotificationContext';
 import { useAuth } from '../hooks/useAuth';
-import { notificationAPI } from '../services/api';
 import { getAccountIdentity, getNavigationLinks } from '../utils/navigation';
+import { formatUnreadCount } from '../utils/notifications';
 
 const Icon = ({ children, className = 'h-5 w-5' }) => <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">{children}</svg>;
 const SunIcon = () => <Icon><path strokeLinecap="round" d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.36 6.36-1.42-1.42M7.06 7.06 5.64 5.64m12.72 0-1.42 1.42M7.06 16.94l-1.42 1.42" /><circle cx="12" cy="12" r="4" /></Icon>;
@@ -19,9 +21,11 @@ export default function Navbar() {
   const reduceMotion = useReducedMotion();
   const [navigationOpen, setNavigationOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const [unreadCount, setUnreadCount] = useState(0);
+  const [notificationOpen, setNotificationOpen] = useState(false);
+  const { unreadCount } = useNotifications();
   const navigationButtonRef = useRef(null);
   const profileButtonRef = useRef(null);
+  const notificationButtonRef = useRef(null);
   const navRef = useRef(null);
   const links = useMemo(() => getNavigationLinks(user?.role), [user?.role]);
   const [dark, setDark] = useState(() => {
@@ -37,33 +41,19 @@ export default function Navbar() {
   }, [dark]);
 
   useEffect(() => {
-    let mounted = true;
-    if (!user) return undefined;
-    const load = async () => {
-      try {
-        const response = await notificationAPI.getAll();
-        if (mounted) setUnreadCount((response.data.data || []).filter((item) => !item.isRead).length);
-      } catch { if (mounted) setUnreadCount(0); }
-    };
-    load();
-    const interval = setInterval(load, 30000);
-    return () => { mounted = false; clearInterval(interval); };
-  }, [user]);
-
-  useEffect(() => {
-    if (!navigationOpen && !profileOpen) return undefined;
+    if (!navigationOpen && !profileOpen && !notificationOpen) return undefined;
     const onKeyDown = (event) => {
       if (event.key !== 'Escape') return;
-      (profileOpen ? profileButtonRef : navigationButtonRef).current?.focus();
-      setNavigationOpen(false); setProfileOpen(false);
+      (notificationOpen ? notificationButtonRef : profileOpen ? profileButtonRef : navigationButtonRef).current?.focus();
+      setNavigationOpen(false); setProfileOpen(false); setNotificationOpen(false);
     };
     const onPointerDown = (event) => {
-      if (!navRef.current?.contains(event.target)) { setNavigationOpen(false); setProfileOpen(false); }
+      if (!navRef.current?.contains(event.target)) { setNavigationOpen(false); setProfileOpen(false); setNotificationOpen(false); }
     };
     document.addEventListener('keydown', onKeyDown);
     document.addEventListener('pointerdown', onPointerDown);
     return () => { document.removeEventListener('keydown', onKeyDown); document.removeEventListener('pointerdown', onPointerDown); };
-  }, [navigationOpen, profileOpen]);
+  }, [navigationOpen, profileOpen, notificationOpen]);
 
   const { displayName, initials } = getAccountIdentity(user?.name);
   const handleLogout = () => { setProfileOpen(false); logout(); navigate('/'); };
@@ -84,14 +74,14 @@ export default function Navbar() {
         </div>
 
         <div className="ml-auto flex shrink-0 items-center gap-1 min-[1440px]:ml-2 sm:gap-2">
-          <button ref={navigationButtonRef} type="button" className="control-icon min-[1440px]:hidden" aria-label={`${navigationOpen ? 'Close' : 'Open'} navigation menu`} aria-expanded={navigationOpen} aria-controls="compact-navigation" onClick={() => { setNavigationOpen((value) => !value); setProfileOpen(false); }}><MenuIcon open={navigationOpen} /></button>
-          <Link to="/notifications" className="control-icon relative" aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`}>
-            <BellIcon />
-            {unreadCount > 0 && <span className="absolute -right-1 -top-1 grid min-h-4 min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold">{unreadCount > 99 ? '99+' : unreadCount}</span>}
-          </Link>
+          <button ref={navigationButtonRef} type="button" className="control-icon min-[1440px]:hidden" aria-label={`${navigationOpen ? 'Close' : 'Open'} navigation menu`} aria-expanded={navigationOpen} aria-controls="compact-navigation" onClick={() => { setNavigationOpen((value) => !value); setProfileOpen(false); setNotificationOpen(false); }}><MenuIcon open={navigationOpen} /></button>
+          <div className="relative">
+            <button ref={notificationButtonRef} type="button" className="control-icon relative" aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`} aria-expanded={notificationOpen} aria-controls="notification-panel" onClick={() => { setNotificationOpen((value) => !value); setNavigationOpen(false); setProfileOpen(false); }}><BellIcon />{unreadCount > 0 && <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold leading-none">{formatUnreadCount(unreadCount)}</span>}</button>
+            <AnimatePresence>{notificationOpen && <motion.div initial={reduceMotion ? false : { opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}><NotificationPanel onClose={() => { setNotificationOpen(false); notificationButtonRef.current?.focus(); }} /></motion.div>}</AnimatePresence>
+          </div>
           <button type="button" onClick={() => setDark((value) => !value)} aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'} title={dark ? 'Use light theme' : 'Use dark theme'} className="control-icon">{dark ? <SunIcon /> : <MoonIcon />}</button>
           <div className="relative">
-            <button ref={profileButtonRef} type="button" className="flex h-10 max-w-[9.5rem] items-center gap-2 rounded-lg border border-white/15 px-1.5 text-left hover:bg-slate-800 sm:max-w-[13rem] sm:pr-2" aria-label={`Account menu for ${displayName}`} aria-expanded={profileOpen} aria-controls="profile-menu" onClick={() => { setProfileOpen((value) => !value); setNavigationOpen(false); }}>
+            <button ref={profileButtonRef} type="button" className="flex h-10 max-w-[9.5rem] items-center gap-2 rounded-lg border border-white/15 px-1.5 text-left hover:bg-slate-800 sm:max-w-[13rem] sm:pr-2" aria-label={`Account menu for ${displayName}`} aria-expanded={profileOpen} aria-controls="profile-menu" onClick={() => { setProfileOpen((value) => !value); setNavigationOpen(false); setNotificationOpen(false); }}>
               <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-blue-600 text-xs font-bold">{initials}</span>
               <span className="hidden min-w-0 flex-1 truncate text-sm font-semibold md:block">{displayName}</span>
               <span className="hidden text-slate-400 sm:block"><ChevronIcon /></span>

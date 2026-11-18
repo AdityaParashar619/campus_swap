@@ -21,6 +21,8 @@ import { exposeContactForConnection } from '../utils/connections.js';
 import { consumeDevelopmentMail } from '../utils/devMailCapture.js';
 import { isPasswordStrong, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy.js';
 import { validateInstitutionalEmail } from '../utils/institutionalIdentity.js';
+import { academicProfile } from '../utils/institution.js';
+import { uploadAvatar } from '../services/avatarService.js';
 
 const sanitizeUser = (user) => ({
   id: user._id,
@@ -44,9 +46,7 @@ const sanitizeUser = (user) => ({
   phoneNumber: user.phoneNumber,
   whatsappNumber: user.whatsappNumber,
   contactVisibility: user.contactVisibility,
-  collegeName: user.collegeName,
-  course: user.course,
-  yearSemester: user.yearSemester,
+  ...academicProfile(user),
   bio: user.bio,
   interests: user.interests,
   skills: user.skills,
@@ -166,7 +166,7 @@ const claimableStudentOtpFilter = (email) => ({
 });
 
 const registerStudentLogic = async (req, res, deliverCode, isDuplicate = (query, collection) => collection === 'accountByEmail' ? User.findOne(query) : collection === 'accountByEnrollment' ? User.exists(query) : collection === 'pending' ? EmailVerification.exists(query) : collection === 'pendingEntry' ? EmailVerification.findOne(query) : User.exists(query), savePending = (filter, update, options) => EmailVerification.findOneAndUpdate(filter, update, options), removePending = (id) => EmailVerification.deleteOne({ _id: id }), reserve = reserveEnrollment, release = releaseEnrollment, generateCode = createOtp) => {
-  const { name, email: rawEmail, enrollmentNumber, department, branch, semester, phoneNumber, password, confirmPassword, profilePicture, bio, skills, interests } = req.body;
+  const { name, email: rawEmail, enrollmentNumber, department, branch, semester, phoneNumber, password, confirmPassword } = req.body;
   const email = normalizeEmail(rawEmail);
   if (!/^\S+@\S+\.\S+$/.test(email)) {
     throw new BadRequest('Enter a valid institutional email address.');
@@ -241,7 +241,7 @@ const registerStudentLogic = async (req, res, deliverCode, isDuplicate = (query,
     name: name.trim(), email: identity.email, enrollmentNumber: identity.enrollmentNumber, department: department.trim(), branch: identity.branch,
     semester: String(semester), yearSemester: String(semester), phoneNumber: phoneNumber.trim(),
     institutionalYearCode: identity.graduationYearCode, institutionalRollNumber: identity.emailRollNumber,
-    password: await bcrypt.hash(password, 12), profilePicture: profilePicture || '', bio: bio || '', skills: skills || [], interests: interests || []
+    password: await bcrypt.hash(password, 12)
   };
   const expiresAt = new Date(Date.now() + env.otpTtlMinutes * 60_000);
   let reservation;
@@ -460,7 +460,10 @@ export const refreshSession = asyncHandler(async (req, res) => {
 
 export const logout = asyncHandler(async (req, res) => {
   const rawToken = req.cookies?.refreshToken;
-  if (rawToken) await RefreshSession.updateOne({ tokenHash: hashToken(rawToken), revokedAt: null }, { $set: { revokedAt: new Date() } });
+  const session = rawToken
+    ? await RefreshSession.findOneAndUpdate({ tokenHash: hashToken(rawToken), revokedAt: null }, { $set: { revokedAt: new Date() } }, { new: false })
+    : null;
+  if (session?.user) req.app?.locals?.io?.in(`user:${session.user}`).disconnectSockets(true);
   res.clearCookie('refreshToken', { path: '/api/auth' });
   res.json({ success: true, message: 'Signed out.' });
 });
@@ -474,6 +477,7 @@ export const updatePassword = asyncHandler(async (req, res) => {
   user.tokenVersion = (user.tokenVersion || 0) + 1;
   await user.save();
   await RefreshSession.updateMany({ user: user._id, revokedAt: null }, { $set: { revokedAt: new Date() } });
+  req.app?.locals?.io?.in(`user:${user._id}`).disconnectSockets(true);
   res.json({ success: true, message: 'Password updated. Sign in again on other devices.' });
 });
 
@@ -664,27 +668,31 @@ export const getMe = asyncHandler(async (req, res) => {
 export const updateProfile = asyncHandler(async (req, res) => {
   const allowedFields = [
     'name',
-    'collegeName',
-    'course',
-    'yearSemester',
     'bio',
     'interests',
     'skills',
-    'profilePicture',
     'phoneNumber',
     'whatsappNumber',
     'contactVisibility'
   ];
+  const protectedFields = ['email', 'enrollmentNumber', 'branch', 'department', 'semester', 'yearSemester', 'course', 'collegeName', 'role', 'accountType', 'emailVerified', 'verificationStatus', 'isVerifiedStudent', 'password', 'profilePicture'];
+  const attemptedProtectedField = protectedFields.find((field) => field in req.body);
+  if (attemptedProtectedField) throw new BadRequest(`${attemptedProtectedField} cannot be changed through profile editing.`);
   const updates = {};
   for (const key of allowedFields) if (key in req.body) updates[key] = req.body[key];
   if (updates.name !== undefined && (typeof updates.name !== 'string' || !updates.name.trim() || updates.name.length > 60)) throw new BadRequest('Name must be between 1 and 60 characters.');
-  for (const field of ['bio', 'collegeName', 'course', 'yearSemester', 'profilePicture', 'phoneNumber', 'whatsappNumber']) {
+  for (const field of ['bio', 'phoneNumber', 'whatsappNumber']) {
     if (updates[field] !== undefined && typeof updates[field] !== 'string') throw new BadRequest(`${field} must be text.`);
   }
   if (updates.bio?.length > 300) throw new BadRequest('Bio must be 300 characters or fewer.');
-  if (typeof updates.profilePicture === 'string' && updates.profilePicture.length > 700_000) throw new BadRequest('Profile picture must be smaller than 512 KB or use an external image URL.');
   if (updates.interests && (!Array.isArray(updates.interests) || updates.interests.length > 30)) throw new BadRequest('Interests must contain at most 30 values.');
   if (updates.skills && (!Array.isArray(updates.skills) || updates.skills.length > 30)) throw new BadRequest('Skills must contain at most 30 values.');
+  if (updates.contactVisibility && !['connections', 'private'].includes(updates.contactVisibility)) throw new BadRequest('Invalid contact visibility.');
+  for (const field of ['name', 'bio', 'phoneNumber', 'whatsappNumber']) if (typeof updates[field] === 'string') updates[field] = updates[field].trim();
+  for (const field of ['interests', 'skills']) if (updates[field]) updates[field] = updates[field].map((value) => {
+    if (typeof value !== 'string' || value.trim().length > 50) throw new BadRequest(`${field} values must be text with at most 50 characters.`);
+    return value.trim();
+  }).filter(Boolean);
 
   const user = await User.findByIdAndUpdate(req.user.userId, updates, { new: true, runValidators: true, strict: true });
   if (!user) throw new NotFound('User not found');
@@ -692,11 +700,18 @@ export const updateProfile = asyncHandler(async (req, res) => {
   res.json({ success: true, message: 'Profile updated', data: sanitizeUser(user) });
 });
 
+export const updateAvatar = asyncHandler(async (req, res) => {
+  const profilePicture = await uploadAvatar(req.file, req.user.userId);
+  const user = await User.findByIdAndUpdate(req.user.userId, { $set: { profilePicture } }, { new: true, runValidators: true });
+  if (!user) throw new NotFound('User not found');
+  res.json({ success: true, message: 'Profile image updated', data: sanitizeUser(user) });
+});
+
 export const getAllUsers = asyncHandler(async (req, res) => {
   const currentUserId = req.user.userId;
   const [users, connections] = await Promise.all([
     User.find({ _id: { $ne: currentUserId }, isBlocked: { $ne: true }, accountStatus: { $nin: ['suspended', 'blocked', 'pending'] }, accountType: { $ne: 'alumni' } }).select(
-      'name _id course yearSemester trustScore isVerifiedStudent profilePicture collegeName bio interests skills contactVisibility accountStatus'
+      'name _id branch semester course yearSemester trustScore isVerifiedStudent profilePicture bio interests skills contactVisibility accountStatus'
     ).sort({ createdAt: -1 }).limit(500),
     Connection.find({ status: 'accepted', $or: [{ requester: currentUserId }, { recipient: currentUserId }] })
   ]);
@@ -711,6 +726,7 @@ export const getAllUsers = asyncHandler(async (req, res) => {
 
   const data = users.map((student) => ({
     ...exposeContactForConnection(student, connectedUserIds.has(student._id.toString())),
+    ...academicProfile(student),
     isConnected: connectedUserIds.has(student._id.toString())
   }));
 

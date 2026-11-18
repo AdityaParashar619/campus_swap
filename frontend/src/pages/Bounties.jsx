@@ -1,239 +1,98 @@
-import { motion } from 'framer-motion';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Button, PageTransition, PremiumCard } from '../components/ui';
 import { useAuth } from '../hooks/useAuth';
 import Layout from '../layouts/Layout';
 import { requestAPI } from '../services/api';
+import { buildHelpChatState, getRequestAction } from '../utils/requestView';
+
+const emptyForm = { title: '', description: '', category: 'Borrow', location: '' };
+const getInitials = (name) => name?.split(' ').map((part) => part[0]).join('').slice(0, 2).toUpperCase() || '?';
 
 export default function Bounties() {
   const [requests, setRequests] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
+  const [notice, setNotice] = useState({ type: '', text: '' });
   const [showForm, setShowForm] = useState(false);
-  const [activeResponseId, setActiveResponseId] = useState(null);
-  const [responseMessage, setResponseMessage] = useState('');
-  const [notice, setNotice] = useState('');
-  const [formData, setFormData] = useState({ title: '', description: '', category: 'Borrow', location: '' });
+  const [formData, setFormData] = useState(emptyForm);
+  const [creating, setCreating] = useState(false);
+  const [busyId, setBusyId] = useState('');
   const { user } = useAuth();
+  const navigate = useNavigate();
   const currentUserId = user?.id || user?._id;
 
   const fetchRequests = async () => {
     setLoading(true);
+    setLoadError('');
     try {
-      const response = await requestAPI.getAll();
+      const response = await requestAPI.getAll({ page: 1, limit: 50 });
       setRequests(response.data.data || []);
     } catch (error) {
-      setNotice(error.userMessage || 'Failed to fetch requests');
-    } finally {
-      setLoading(false);
-    }
+      setLoadError(error.userMessage || 'Could not load community requests.');
+    } finally { setLoading(false); }
   };
 
-  useEffect(() => {
-    fetchRequests();
-  }, []);
+  useEffect(() => { fetchRequests(); }, []);
 
-  const openRequests = useMemo(() => requests.filter((request) => request.status === 'open'), [requests]);
-  const completedRequests = useMemo(() => requests.filter((request) => request.status !== 'open'), [requests]);
-
-  const handleCreateRequest = async (e) => {
-    e.preventDefault();
-    setNotice('');
+  const handleCreateRequest = async (event) => {
+    event.preventDefault();
+    if (creating) return;
+    setCreating(true);
+    setNotice({ type: '', text: '' });
     try {
       await requestAPI.create(formData);
-      setFormData({ title: '', description: '', category: 'Borrow', location: '' });
+      setFormData(emptyForm);
       setShowForm(false);
-      setNotice('Request published');
-      fetchRequests();
+      setNotice({ type: 'success', text: 'Request published.' });
+      await fetchRequests();
     } catch (error) {
-      setNotice(error.userMessage || 'Failed to create request');
-    }
+      setNotice({ type: 'error', text: error.userMessage || 'Could not publish this request.' });
+    } finally { setCreating(false); }
   };
 
-  const submitResponse = async (requestId) => {
-    if (!responseMessage.trim()) {
-      setNotice('Write a response before sending');
-      return;
-    }
-
-    setNotice('');
+  const closeRequest = async (request) => {
+    if (busyId || !window.confirm(`Close “${request.title}”? It will be removed from the public requests feed.`)) return;
+    setBusyId(request._id);
+    setNotice({ type: '', text: '' });
     try {
-      await requestAPI.respond(requestId, responseMessage);
-      setResponseMessage('');
-      setActiveResponseId(null);
-      setNotice('Response sent');
-      fetchRequests();
+      await requestAPI.updateStatus(request._id, 'closed');
+      setRequests((current) => current.filter((item) => item._id !== request._id));
+      setNotice({ type: 'success', text: 'Request closed and removed from the public feed.' });
     } catch (error) {
-      setNotice(error.userMessage || 'Failed to respond');
-    }
+      setNotice({ type: 'error', text: error.userMessage || 'Could not close this request. The request remains visible.' });
+    } finally { setBusyId(''); }
   };
 
-  const markFulfilled = async (id, fulfilledBy) => {
-    setNotice('');
+  const markFulfilled = async (request, fulfilledBy) => {
+    if (busyId || !window.confirm(`Accept this offer and complete “${request.title}”?`)) return;
+    setBusyId(request._id);
     try {
-      await requestAPI.updateStatus(id, 'fulfilled', fulfilledBy);
-      setNotice('Request marked fulfilled');
-      fetchRequests();
+      await requestAPI.updateStatus(request._id, 'fulfilled', fulfilledBy);
+      setRequests((current) => current.filter((item) => item._id !== request._id));
+      setNotice({ type: 'success', text: 'Offer accepted and request completed.' });
     } catch (error) {
-      setNotice(error.userMessage || 'Failed to update request');
-    }
+      setNotice({ type: 'error', text: error.userMessage || 'Could not complete this request.' });
+    } finally { setBusyId(''); }
   };
 
-  const closeRequest = async (id) => {
-    setNotice('');
-    try {
-      await requestAPI.updateStatus(id, 'closed');
-      setNotice('Request closed');
-      fetchRequests();
-    } catch (error) {
-      setNotice(error.userMessage || 'Failed to close request');
-    }
-  };
+  const offerHelp = (request) => navigate('/chat', { state: buildHelpChatState(request) });
 
-  const renderRequest = (request) => {
-    const isOwner = request.user?._id === currentUserId;
-    const hasResponded = request.responses?.some((response) => response.user?._id === currentUserId);
+  return <PageTransition><Layout><main className="min-h-screen py-6 sm:py-10"><div className="section-container space-y-6 sm:space-y-8">
+    <header className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between"><div><p className="mb-2 text-sm font-semibold text-blue-700 dark:text-blue-300">Campus help board</p><h1 className="text-section-title">Community Requests</h1><p className="mt-2 max-w-2xl text-body-sm">Ask for practical campus help or offer support through the existing secure Chat experience.</p></div><Button variant="primary" size="lg" className="w-full sm:w-auto" onClick={() => setShowForm((visible) => !visible)}>{showForm ? 'Cancel' : 'New Request'}</Button></header>
 
-    return (
-      <PremiumCard key={request._id}>
-        <div className="flex flex-col gap-5">
-          <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-4">
-            <div>
-              <h3 className="text-feature-title mb-2">{request.title}</h3>
-              <p className="text-body-sm mb-2">{request.description || 'No extra details provided.'}</p>
-              <p className="text-body-sm">{request.category} | {request.location || 'Campus'} | Requested by {request.user?.name}</p>
-              <p className="text-xs mt-2 text-slate-500">Status: {request.status}{request.fulfilledBy?.name ? ` by ${request.fulfilledBy.name}` : ''}</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {!isOwner && request.status === 'open' && (
-                <Button variant="secondary" onClick={() => setActiveResponseId(activeResponseId === request._id ? null : request._id)}>
-                  {hasResponded ? 'Update Response' : 'Respond'}
-                </Button>
-              )}
-              {isOwner && request.status === 'open' && request.responses?.length === 0 && (
-                <Button variant="secondary" onClick={() => closeRequest(request._id)}>Close</Button>
-              )}
-            </div>
-          </div>
+    {notice.text && <div role={notice.type === 'error' ? 'alert' : 'status'} className={`rounded-lg border px-4 py-3 text-sm font-semibold ${notice.type === 'error' ? 'border-rose-200 bg-rose-50 text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200' : 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900 dark:bg-emerald-950/40 dark:text-emerald-200'}`}>{notice.text}</div>}
+    {loadError && <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">{loadError} <button type="button" className="font-bold underline" onClick={fetchRequests}>Retry</button></div>}
 
-          {activeResponseId === request._id && (
-            <div className="rounded-xl border border-slate-200/60 bg-white/60 p-4">
-              <textarea
-                className="premium-surface w-full px-4 py-3"
-                rows="3"
-                placeholder="Tell them how you can help and when you are available."
-                value={responseMessage}
-                onChange={(e) => setResponseMessage(e.target.value)}
-              />
-              <div className="mt-3 flex gap-2">
-                <Button variant="gradient" onClick={() => submitResponse(request._id)}>Send Response</Button>
-                <Button variant="secondary" onClick={() => setActiveResponseId(null)}>Cancel</Button>
-              </div>
-            </div>
-          )}
+    {showForm && <PremiumCard hover={false}><form onSubmit={handleCreateRequest} className="space-y-4"><div><h2 className="text-feature-title">Create a request</h2><p className="mt-1 text-body-sm">Give students enough context to decide whether they can help.</p></div><label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">Title<input type="text" value={formData.title} onChange={(event) => setFormData({ ...formData, title: event.target.value })} required maxLength={120} className="form-control mt-1" placeholder="Need calculator for tomorrow's exam" /></label><label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">Description<textarea value={formData.description} onChange={(event) => setFormData({ ...formData, description: event.target.value })} maxLength={1000} rows="4" className="form-control mt-1" placeholder="Add useful details, timing, and any constraints." /></label><div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">Request type<select value={formData.category} onChange={(event) => setFormData({ ...formData, category: event.target.value })} className="form-control mt-1">{['Borrow', 'Notes', 'Help', 'Other'].map((category) => <option key={category}>{category}</option>)}</select></label><label className="block text-sm font-semibold text-slate-700 dark:text-slate-200">Location<input type="text" value={formData.location} onChange={(event) => setFormData({ ...formData, location: event.target.value })} maxLength={120} className="form-control mt-1" placeholder="Library, hostel, or campus area" /></label></div><div className="flex justify-end"><Button type="submit" variant="primary" disabled={creating}>{creating ? 'Publishing…' : 'Publish Request'}</Button></div></form></PremiumCard>}
 
-          {request.responses?.length > 0 && (
-            <div className="space-y-3 border-t border-slate-200/40 pt-4">
-              <p className="text-sm font-semibold text-slate-700">Responses</p>
-              {request.responses.map((response) => (
-                <div key={`${request._id}-${response.user?._id}`} className="flex flex-col gap-3 rounded-xl bg-slate-50/80 p-4 md:flex-row md:items-center md:justify-between">
-                  <div>
-                    <p className="font-semibold">{response.user?.name || 'Student'} <span className="text-xs font-normal text-slate-500">{response.status}</span></p>
-                    <p className="text-body-sm">{response.message}</p>
-                  </div>
-                  {isOwner && request.status === 'open' && (
-                    <Button variant="gradient" size="sm" onClick={() => markFulfilled(request._id, response.user?._id)}>
-                      Accept and Fulfill
-                    </Button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      </PremiumCard>
-    );
-  };
-
-  return (
-    <PageTransition>
-      <Layout>
-        <div className="min-h-screen py-12">
-          <div className="section-container space-y-8">
-            <motion.div initial={{ opacity: 0, y: -30 }} animate={{ opacity: 1, y: 0 }}>
-              <div className="flex justify-between items-start md:items-center gap-6">
-                <div>
-                  <h1 className="text-section-title mb-2">Community Requests</h1>
-                  <p className="text-body-sm">Ask for urgent help and let other students offer support dynamically.</p>
-                </div>
-                <Button variant="gradient" onClick={() => setShowForm(!showForm)} size="lg">
-                  {showForm ? 'Cancel' : 'New Request'}
-                </Button>
-              </div>
-            </motion.div>
-
-            {notice && <p className="rounded-lg bg-blue-50 px-4 py-3 text-sm font-medium text-blue-700">{notice}</p>}
-
-            {showForm && (
-              <PremiumCard>
-                <form onSubmit={handleCreateRequest} className="space-y-4">
-                  <input
-                    type="text"
-                    placeholder="Need calculator for tomorrow exam"
-                    value={formData.title}
-                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
-                    required
-                    className="w-full px-4 py-3 border border-slate-300/30 rounded-xl bg-white/60"
-                  />
-                  <textarea
-                    placeholder="Add details, urgency, and preferred response method..."
-                    value={formData.description}
-                    onChange={(e) => setFormData({ ...formData, description: e.target.value })}
-                    rows="3"
-                    className="w-full px-4 py-3 border border-slate-300/30 rounded-xl bg-white/60"
-                  />
-                  <div className="grid md:grid-cols-2 gap-4">
-                    <input
-                      type="text"
-                      placeholder="Category (Borrow, Notes, Help, Other)"
-                      value={formData.category}
-                      onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                      className="w-full px-4 py-3 border border-slate-300/30 rounded-xl bg-white/60"
-                    />
-                    <input
-                      type="text"
-                      placeholder="Location / Hostel"
-                      value={formData.location}
-                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                      className="w-full px-4 py-3 border border-slate-300/30 rounded-xl bg-white/60"
-                    />
-                  </div>
-                  <Button variant="gradient" type="submit">Publish Request</Button>
-                </form>
-              </PremiumCard>
-            )}
-
-            {loading ? (
-              <div className="grid md:grid-cols-2 gap-6">{[1, 2, 3].map((item) => <div key={item} className="skeleton h-44" />)}</div>
-            ) : requests.length === 0 ? (
-              <PremiumCard><p className="text-body-sm">No requests yet. Start the community help thread.</p></PremiumCard>
-            ) : (
-              <div className="space-y-8">
-                <div className="space-y-5">
-                  <h2 className="text-feature-title">Open Requests</h2>
-                  {openRequests.length > 0 ? openRequests.map(renderRequest) : <PremiumCard><p className="text-body-sm">No open requests right now.</p></PremiumCard>}
-                </div>
-
-                {completedRequests.length > 0 && (
-                  <div className="space-y-5">
-                    <h2 className="text-feature-title">Completed Requests</h2>
-                    {completedRequests.map(renderRequest)}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
-        </div>
-      </Layout>
-    </PageTransition>
-  );
+    <section aria-labelledby="open-requests-heading"><div className="mb-4 flex items-end justify-between gap-3"><div><h2 id="open-requests-heading" className="text-feature-title">Open Requests</h2><p className="mt-1 text-body-sm">Only active requests are shown publicly.</p></div>{!loading && <span className="chip">{requests.length} open</span>}</div>
+      {loading ? <div className="grid gap-5 md:grid-cols-2">{[1, 2, 3, 4].map((item) => <div key={item} className="skeleton h-64" />)}</div> : requests.length === 0 ? <PremiumCard hover={false} className="py-12 text-center"><h3 className="text-lg font-black text-slate-950 dark:text-white">No open requests</h3><p className="mt-2 text-body-sm">Everything has been handled. Create a request when you need campus help.</p><Button className="mt-5" onClick={() => setShowForm(true)}>Create a Request</Button></PremiumCard> : <div className="grid gap-5 md:grid-cols-2">{requests.map((request) => {
+        const action = getRequestAction(request, currentUserId);
+        return <PremiumCard key={request._id} hover={false} className="flex min-w-0 flex-col"><div className="flex items-start justify-between gap-3"><span className="chip">{request.category || 'General'}</span><span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-bold text-emerald-700 dark:bg-emerald-400/10 dark:text-emerald-200">Open</span></div><h3 className="mt-4 break-words text-xl font-black text-slate-950 dark:text-white">{request.title}</h3><p className="mt-2 flex-1 whitespace-pre-wrap break-words text-sm leading-relaxed text-slate-600 dark:text-slate-300">{request.description || 'No additional details provided.'}</p><div className="mt-5 flex items-center gap-3 border-t border-slate-200 pt-4 dark:border-slate-700"><div className="grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-lg bg-blue-600 text-sm font-bold text-white">{request.user?.profilePicture ? <img src={request.user.profilePicture} alt="" className="h-full w-full object-cover" /> : getInitials(request.user?.name)}</div><div className="min-w-0 flex-1"><p className="truncate text-sm font-bold text-slate-900 dark:text-white">{request.user?.name || 'Student'}</p><p className="truncate text-xs text-slate-500 dark:text-slate-400">{request.location || 'Campus location not specified'}</p></div></div><div className="mt-4 flex flex-wrap justify-end gap-2">{action === 'offer-help' && <Button variant="primary" onClick={() => offerHelp(request)}>Offer Help</Button>}{action === 'close' && <Button variant="secondary" disabled={busyId === request._id} onClick={() => closeRequest(request)}>{busyId === request._id ? 'Closing…' : 'Close Request'}</Button>}</div>
+          {request.responses?.length > 0 && action === 'close' && <div className="mt-4 space-y-2 border-t border-slate-200 pt-4 dark:border-slate-700"><p className="text-xs font-bold uppercase tracking-wide text-slate-500">Previous offers</p>{request.responses.map((response) => <div key={`${request._id}-${response.user?._id}`} className="flex flex-col gap-2 rounded-lg bg-slate-50 p-3 dark:bg-slate-800 sm:flex-row sm:items-center sm:justify-between"><div><p className="text-sm font-bold text-slate-900 dark:text-white">{response.user?.name || 'Student'}</p><p className="text-xs text-slate-600 dark:text-slate-300">{response.message}</p></div><Button size="sm" disabled={busyId === request._id} onClick={() => markFulfilled(request, response.user?._id)}>Accept Offer</Button></div>)}</div>}
+        </PremiumCard>;
+      })}</div>}
+    </section>
+  </div></main></Layout></PageTransition>;
 }

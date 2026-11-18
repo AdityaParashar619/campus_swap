@@ -16,22 +16,31 @@ const menuItems = [
 ];
 
 export default function Dashboard() {
-  const { user } = useAuth();
-  const [stats, setStats] = useState({ listingsCount: 0, connectionsCount: 0, messagesCount: 0 });
-  const [status, setStatus] = useState('loading');
+  const { user, profileStats } = useAuth();
+  const [stats, setStats] = useState(profileStats || { listingsCount: 0, connectionsCount: 0, messagesCount: 0 });
+  const [status, setStatus] = useState(profileStats ? 'ready' : 'loading');
 
   useEffect(() => {
+    if (profileStats) {
+      setStats(profileStats);
+      setStatus('ready');
+      return undefined;
+    }
+    let active = true;
     (async () => {
       try {
         const response = await authAPI.getMe();
+        if (!active) return;
         setStats(response.data.stats || {});
         setStatus('ready');
       } catch {
+        if (!active) return;
         setStats({ listingsCount: 0, connectionsCount: 0, messagesCount: 0 });
         setStatus('error');
       }
     })();
-  }, []);
+    return () => { active = false; };
+  }, [profileStats]);
 
   return (
     <PageTransition>

@@ -10,6 +10,7 @@ export const socketAuthMiddleware = async (socket, next) => {
       return next(new Error('Unauthorized'));
     }
     socket.data.userId = user._id.toString();
+    socket.data.tokenExpiresAt = decoded.exp ? decoded.exp * 1000 : null;
     return next();
   } catch {
     return next(new Error('Unauthorized'));

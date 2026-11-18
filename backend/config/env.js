@@ -24,6 +24,10 @@ const resendTestRecipient = (process.env.RESEND_TEST_RECIPIENT || 'delivered@res
 const emailFrom = process.env.EMAIL_FROM || '';
 const gmailUser = process.env.GMAIL_USER || '';
 const gmailAppPassword = (process.env.GMAIL_APP_PASSWORD || '').replace(/\s/g, '');
+const mongoUri = process.env.MONGO_URI || (nodeEnv === 'production' ? '' : 'mongodb://127.0.0.1:27017/campusswap');
+const cloudinaryCloudName = process.env.CLOUDINARY_CLOUD_NAME || '';
+const cloudinaryApiKey = process.env.CLOUDINARY_API_KEY || '';
+const cloudinaryApiSecret = process.env.CLOUDINARY_API_SECRET || '';
 const institutionEmailPattern = process.env.INSTITUTION_EMAIL_PATTERN || '^[a-z]+[0-9]{2}(cs|bc|ai|ds|it|iot|ec|ce|me|ee)[0-9]{3}@satiengg\\.in$';
 const allowedCollegeDomains = (process.env.ALLOWED_COLLEGE_DOMAINS || 'satiengg.in').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean);
 const institutionBranches = (process.env.INSTITUTION_BRANCHES || 'cs,bc,ai,ds,it,iot,ec,ce,me,ee').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean);
@@ -98,6 +102,22 @@ if (emailProvider === 'resend' && nodeEnv === 'production' && !otpMockEnabled &&
   throw new Error('Production Resend mode requires RESEND_API_KEY and a valid EMAIL_FROM sender');
 }
 if (nodeEnv === 'production') {
+  if (!mongoUri) throw new Error('Production requires an explicit MONGO_URI');
+  try {
+    const parsedMongoUri = new URL(mongoUri);
+    const databaseName = parsedMongoUri.pathname.replace(/^\//, '').split('?')[0];
+    if (!['mongodb:', 'mongodb+srv:'].includes(parsedMongoUri.protocol) || !databaseName || /(?:^|_)(?:test|staging)(?:_|$)/i.test(databaseName)) {
+      throw new Error('unsafe MongoDB target');
+    }
+  } catch {
+    throw new Error('Production MONGO_URI must be a valid MongoDB URI with an explicit non-test database name');
+  }
+  if (emailProvider === 'resend' && !resendDomainVerified) {
+    throw new Error('Production Resend delivery requires RESEND_DOMAIN_VERIFIED=true after DNS verification');
+  }
+  if (!cloudinaryCloudName || !cloudinaryApiKey || !cloudinaryApiSecret) {
+    throw new Error('Production requires complete backend-only Cloudinary credentials');
+  }
   if (!process.env.OTP_PEPPER || otpPepper.length < 32 || otpPepper === process.env.JWT_SECRET) {
     throw new Error('Production requires a separate OTP_PEPPER of at least 32 characters');
   }
@@ -130,7 +150,7 @@ try {
 export const env = {
   nodeEnv,
   port,
-  mongoUri: process.env.MONGO_URI || 'mongodb://127.0.0.1:27017/campusswap',
+  mongoUri,
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   frontendUrl,
@@ -167,9 +187,9 @@ export const env = {
   accessTokenTtl: process.env.ACCESS_TOKEN_TTL || '15m',
   refreshTokenDays: Number(process.env.REFRESH_TOKEN_DAYS) || 30,
   trustProxyHops,
-  cloudinaryCloudName: process.env.CLOUDINARY_CLOUD_NAME || '',
-  cloudinaryApiKey: process.env.CLOUDINARY_API_KEY || '',
-  cloudinaryApiSecret: process.env.CLOUDINARY_API_SECRET || '',
+  cloudinaryCloudName,
+  cloudinaryApiKey,
+  cloudinaryApiSecret,
   productImageMaxCount,
   productImageMaxSizeBytes: Math.floor(productImageMaxSizeMb * 1024 * 1024),
   productImagePendingTtlMs: 24 * 60 * 60 * 1000

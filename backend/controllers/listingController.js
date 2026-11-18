@@ -53,12 +53,13 @@ export const getListings = asyncHandler(async (req, res) => {
       .populate('user', 'name email profilePicture trustScore contactVisibility phoneNumber whatsappNumber')
       .sort(sort)
       .skip(skip)
-      .limit(limit),
+      .limit(limit)
+      .lean(),
     Listing.countDocuments(filter)
   ]);
 
   const publicItems = items.map((item) => {
-    const data = item.toObject();
+    const data = item;
     if (data.user) data.user = serializePublicProfile(data.user);
     return data;
   });
@@ -93,7 +94,8 @@ export const getMyListings = asyncHandler(async (req, res) => {
       .populate('user', 'name profilePicture emailVerified verificationStatus')
       .sort(sort)
       .skip(skip)
-      .limit(limit),
+      .limit(limit)
+      .lean(),
     Listing.countDocuments(filter)
   ]);
   res.json({
@@ -203,7 +205,7 @@ export const getSavedListings = asyncHandler(async (req, res) => {
   if (!user) throw new NotFound('User not found');
   filter._id = { $in: user.savedListings };
   const [items, total] = await Promise.all([
-    Listing.find(filter).populate('user', 'name profilePicture emailVerified verificationStatus').sort(sort).skip(skip).limit(limit),
+    Listing.find(filter).populate('user', 'name profilePicture emailVerified verificationStatus').sort(sort).skip(skip).limit(limit).lean(),
     Listing.countDocuments(filter)
   ]);
   res.json({

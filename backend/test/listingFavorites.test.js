@@ -6,7 +6,7 @@ import { addFavoriteListing, getFavoriteStatuses, getSavedListings, reconcileFav
 
 const invoke = (handler, req) => new Promise((resolve) => { const res = { json(body) { this.body = body; resolve({ res: this }); } }; handler(req, res, (error) => resolve({ res, error })); });
 const selected = (value) => ({ select() { return Promise.resolve(value); }, then(resolve, reject) { return Promise.resolve(value).then(resolve, reject); } });
-const listQuery = (value) => ({ populate() { return this; }, sort() { return this; }, skip() { return this; }, limit() { return this; }, then(resolve, reject) { return Promise.resolve(value).then(resolve, reject); } });
+const listQuery = (value) => ({ populate() { return this; }, sort() { return this; }, skip() { return this; }, limit() { return this; }, lean() { return this; }, then(resolve, reject) { return Promise.resolve(value).then(resolve, reject); } });
 const listingId = '507f1f77bcf86cd799439011';
 
 test('idempotent favorite add increments count only when membership changes', { concurrency: false }, async () => {

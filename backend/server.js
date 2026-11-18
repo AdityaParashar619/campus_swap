@@ -11,6 +11,7 @@ import User from './models/User.js';
 import { socketAuthMiddleware } from './middleware/socketAuthMiddleware.js';
 import { verifyEmailProviderConnection } from './utils/emailProvider.js';
 import { cleanupExpiredProductImages } from './services/productImageService.js';
+import { areUsersConnected } from './utils/connections.js';
 
 export const app = createApp();
 export const httpServer = createServer(app);
@@ -24,14 +25,33 @@ app.locals.io = io;
 
 io.on('connection', (socket) => {
   const userId = socket.data.userId;
+  const tokenTimer = socket.data.tokenExpiresAt
+    ? setTimeout(() => {
+      socket.emit('session:expired');
+      socket.disconnect(true);
+    }, Math.max(0, socket.data.tokenExpiresAt - Date.now()))
+    : null;
+  tokenTimer?.unref?.();
   socket.join(`user:${userId}`);
   io.to(`user:${userId}`).emit('presence:update', { userId, online: true });
   socket.on('disconnect', () => {
+    if (tokenTimer) clearTimeout(tokenTimer);
     io.to(`user:${userId}`).emit('presence:update', { userId, online: false });
   });
 
-  socket.on('typing', ({ receiverId, isTyping } = {}) => {
-    if (typeof receiverId === 'string' && receiverId.length <= 64) io.to(`user:${receiverId}`).emit('typing', { senderId: userId, isTyping: Boolean(isTyping) });
+  let lastTypingAt = 0;
+  socket.on('typing', async ({ receiverId, isTyping } = {}) => {
+    if (typeof receiverId !== 'string' || !mongoose.isValidObjectId(receiverId) || receiverId === userId || typeof isTyping !== 'boolean') return;
+    const now = Date.now();
+    if (now - lastTypingAt < 250) return;
+    lastTypingAt = now;
+    try {
+      if (await areUsersConnected(userId, receiverId)) {
+        io.to(`user:${receiverId}`).emit('typing', { senderId: userId, isTyping });
+      }
+    } catch {
+      // Ignore transient authorization lookup failures; never deliver unverified events.
+    }
   });
 });
 
