@@ -118,3 +118,27 @@ Troubleshooting order:
 ## Release gate
 
 Production remains blocked until Stage B supplies a host/provider, HTTPS hostname, authenticated database, verified email delivery, Cloudinary credentials, off-host backup destination, tested restore rehearsal, monitoring destination, and disposable accounts for authenticated browser and two-user Socket.IO tests.
+
+## Limited pilot controls
+
+Pilot registration can be restricted without changing the normal registration workflow. Set `PILOT_MODE_ENABLED=true` and inject `PILOT_ALLOWED_EMAILS` as a comma-separated secret. The backend normalizes email case and rejects non-allowlisted registrations before creating an OTP, reservation, or user. Startup fails closed if pilot mode has an empty, duplicate, or malformed list. Keep the mode disabled in normal development and never place participant identities in source control.
+
+Administrator creation is a one-time operation for a fresh database. Supply a unique email and strong password through the secret store, set `ADMIN_BOOTSTRAP_ENABLED=true` for one controlled startup, verify the created role, then remove the password and set the flag back to false. Bootstrap refuses any email that already exists and never updates roles or passwords. Do not enable it on a restored database or copy the development administrator into production.
+
+The configured provider is authoritative: Compose development defaults to Gmail; direct backend startup and the production overlay default to Resend. Gmail remains supported and requires only Gmail credentials plus `EMAIL_FROM`. Resend DNS verification is required only when `EMAIL_PROVIDER=resend`; unused provider credentials are not required. Before a pilot, send registration and password-reset messages to approved institutional test accounts and verify provider acceptance, mailbox receipt, expiry, resend throttling, and that logs contain no OTP or credential values.
+
+## Legacy administrator avatar
+
+The development administrator's embedded data URL inflates `/api/auth/me` and should not be copied to production. Do not mutate it automatically. For a controlled manual migration: export the exact `profilePicture` field to an encrypted restricted rollback file outside the repository; decode and inspect the image locally; authenticate as the preserved administrator; upload that same image through `PATCH /api/auth/me/avatar`; verify the returned URL is HTTPS and belongs to the configured Cloudinary account, refresh `/api/auth/me`, and inspect the Profile page. Retain the rollback export until a backup and UI check succeed. If verification fails, restore only the original `profilePicture` field using the exact administrator ID. Never delete a Cloudinary asset or the rollback copy based solely on a URL.
+
+## Phase 4.4B local validation
+
+The isolated stack uses `campusswap_phase44b_test` on a MongoDB `tmpfs`; it does not mount or reset the development volume:
+
+```powershell
+docker compose -p campusswap-phase44b -f docker-compose.e2e.yml up -d --build
+npm --prefix frontend run test:e2e
+$env:E2E_ACCESS_TOKEN_TTL='3s'; docker compose -p campusswap-phase44b -f docker-compose.e2e.yml up -d --force-recreate
+$env:PHASE44B_SOCKET_URL='http://127.0.0.1:5100'; npm --prefix backend test -- --test-name-pattern='real Socket.IO'
+docker compose -p campusswap-phase44b -f docker-compose.e2e.yml down
+```

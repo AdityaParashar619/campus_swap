@@ -52,6 +52,9 @@ services:
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:?Set backend-only Cloudinary API secret}
       PRODUCT_IMAGE_MAX_COUNT: ${PRODUCT_IMAGE_MAX_COUNT:-5}
       PRODUCT_IMAGE_MAX_SIZE_MB: ${PRODUCT_IMAGE_MAX_SIZE_MB:-5}
+      ADMIN_BOOTSTRAP_ENABLED: ${ADMIN_BOOTSTRAP_ENABLED:-false}
+      PILOT_MODE_ENABLED: ${PILOT_MODE_ENABLED:-false}
+      PILOT_ALLOWED_EMAILS: ${PILOT_ALLOWED_EMAILS:-}
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
       interval: 15s

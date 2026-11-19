@@ -1,0 +1,53 @@
+services:
+  e2e-mongodb:
+    image: mongo:8
+    tmpfs:
+      - /data/db
+    ports:
+      - "127.0.0.1:27018:27017"
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 2s
+      timeout: 2s
+      retries: 20
+
+  e2e-backend:
+    build: ./backend
+    environment:
+      NODE_ENV: development
+      PORT: 5000
+      MONGO_URI: mongodb://e2e-mongodb:27017/campusswap_phase44b_test
+      JWT_SECRET: phase44b-isolated-jwt-secret-not-for-production
+      OTP_PEPPER: phase44b-isolated-otp-pepper-not-for-production
+      OTP_MOCK_ENABLED: "true"
+      EMAIL_PROVIDER: resend
+      FRONTEND_URL: http://127.0.0.1:8081
+      ACCESS_TOKEN_TTL: ${E2E_ACCESS_TOKEN_TTL:-15m}
+      RATE_LIMIT_MAX: 2000
+      PILOT_MODE_ENABLED: "false"
+      ADMIN_BOOTSTRAP_ENABLED: "false"
+    ports:
+      - "127.0.0.1:5100:5000"
+    networks:
+      default:
+        aliases:
+          - backend
+    depends_on:
+      e2e-mongodb:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:5000/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"]
+      interval: 2s
+      timeout: 2s
+      retries: 30
+
+  e2e-frontend:
+    build:
+      context: ./frontend
+      args:
+        VITE_API_BASE_URL: /api
+    ports:
+      - "127.0.0.1:8081:80"
+    depends_on:
+      e2e-backend:
+        condition: service_healthy
