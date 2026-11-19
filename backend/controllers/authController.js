@@ -2,6 +2,7 @@ import bcrypt from 'bcrypt';
 import crypto from 'crypto';
 import { asyncHandler } from '../middleware/errorMiddleware.js';
 import { env } from '../config/env.js';
+import { assertPilotRegistrationAllowed } from '../utils/pilotAccess.js';
 import { BadRequest, Conflict, Forbidden, InternalError, NotFound, ServiceUnavailable, Unauthorized } from '../utils/AppError.js';
 import { createOpaqueToken, createOtp, hashOtp, hashToken, signAuthToken, secureHashEquals } from '../utils/auth.js';
 import { getPermissions } from '../utils/permissions.js';
@@ -172,6 +173,7 @@ const registerStudentLogic = async (req, res, deliverCode, isDuplicate = (query,
     throw new BadRequest('Enter a valid institutional email address.');
   }
   validateCollegeEmail(email);
+  assertPilotRegistrationAllowed(email);
 
   const existingAccount = await isDuplicate({ email }, 'accountByEmail');
   if (existingAccount) {

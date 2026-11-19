@@ -46,6 +46,16 @@ const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS || 0);
 const productImageMaxCount = Number(process.env.PRODUCT_IMAGE_MAX_COUNT || 5);
 const productImageMaxSizeMb = Number(process.env.PRODUCT_IMAGE_MAX_SIZE_MB || 5);
 const otpPepper = process.env.OTP_PEPPER || (nodeEnv === 'production' ? '' : process.env.JWT_SECRET);
+const pilotModeEnabled = process.env.PILOT_MODE_ENABLED === 'true';
+const pilotAllowedEmails = (process.env.PILOT_ALLOWED_EMAILS || '').split(',').map((value) => value.trim().toLowerCase()).filter(Boolean);
+const adminBootstrapEnabled = process.env.ADMIN_BOOTSTRAP_ENABLED === 'true';
+
+if (pilotModeEnabled && (!pilotAllowedEmails.length || new Set(pilotAllowedEmails).size !== pilotAllowedEmails.length || pilotAllowedEmails.some((email) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)))) {
+  throw new Error('PILOT_MODE_ENABLED requires a non-empty, unique, valid PILOT_ALLOWED_EMAILS list');
+}
+if (adminBootstrapEnabled && !adminEmail && !superAdminEmail) {
+  throw new Error('ADMIN_BOOTSTRAP_ENABLED requires ADMIN_EMAIL or SUPER_ADMIN_EMAIL');
+}
 
 const port = Number(process.env.PORT || 5000);
 if (!Number.isInteger(port) || port < 0 || port > 65535) {
@@ -162,6 +172,7 @@ export const env = {
   adminEmail,
   adminPassword,
   adminName: process.env.ADMIN_NAME || 'CampusSwap Admin',
+  adminBootstrapEnabled,
   superAdminEmail,
   superAdminPassword,
   allowedCollegeDomains,
@@ -192,5 +203,7 @@ export const env = {
   cloudinaryApiSecret,
   productImageMaxCount,
   productImageMaxSizeBytes: Math.floor(productImageMaxSizeMb * 1024 * 1024),
-  productImagePendingTtlMs: 24 * 60 * 60 * 1000
+  productImagePendingTtlMs: 24 * 60 * 60 * 1000,
+  pilotModeEnabled,
+  pilotAllowedEmails
 };

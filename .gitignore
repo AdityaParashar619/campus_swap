@@ -15,4 +15,6 @@ yarn-debug.log*
 yarn-error.log*
 pnpm-debug.log*
 .vite/
+frontend/playwright-report/
+frontend/test-results/
 backend/.npm-cache/
