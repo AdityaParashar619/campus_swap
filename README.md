@@ -1,6 +1,6 @@
 # CampusSwap
 
-CampusSwap is a campus-focused student ecosystem built as a React/Vite frontend and a Node.js/Express modular monolith backed by MongoDB/Mongoose. Current features include marketplace listings, notes, requests, networking, messaging, notifications, reports, and moderation.
+CampusSwap is a campus-focused student ecosystem built as a React/Vite frontend and a Node.js/Express modular monolith backed by MongoDB/Mongoose. Current active features include marketplace listings, community requests, networking, messaging, notifications, reports, and moderation. The legacy Notes data/API is retained for safe archival compatibility but is retired from normal student workflows.
 
 ## Repository layout
 

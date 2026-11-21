@@ -2,23 +2,12 @@ import { asyncHandler } from '../middleware/errorMiddleware.js';
 import { BadRequest, NotFound } from '../utils/AppError.js';
 import Note from '../models/Note.js';
 import User from '../models/User.js';
+import mongoose from 'mongoose';
+import { isSafeNoteFileUrl, normalizeNoteInput } from '../utils/noteValidation.js';
 
 export const createNote = asyncHandler(async (req, res) => {
-  const { title, description, fileUrl, fileType, branch, semester, subject, tags } = req.body;
-
-  if (!title || !fileUrl || !branch || !semester || !subject) {
-    throw new BadRequest('title, fileUrl, branch, semester and subject are required');
-  }
-
   const note = await Note.create({
-    title,
-    description,
-    fileUrl,
-    fileType,
-    branch,
-    semester,
-    subject,
-    tags,
+    ...normalizeNoteInput(req.body),
     user: req.user.userId
   });
 
@@ -30,48 +19,57 @@ export const getNotes = asyncHandler(async (req, res) => {
   const limit = Math.min(Math.max(Number(req.query.limit) || 12, 1), 50);
   const skip = (page - 1) * limit;
 
+  const boundedQuery = (value, max) => typeof value === 'string' ? value.trim().slice(0, max) : '';
   const filter = {};
-  if (req.query.branch) filter.branch = req.query.branch;
-  if (req.query.semester) filter.semester = req.query.semester;
-  if (req.query.subject) filter.subject = req.query.subject;
-  if (req.query.search) filter.$text = { $search: req.query.search };
+  if (req.query.branch) filter.branch = boundedQuery(req.query.branch, 40);
+  if (req.query.semester) filter.semester = boundedQuery(req.query.semester, 2);
+  if (req.query.subject) filter.subject = boundedQuery(req.query.subject, 120);
+  if (req.query.search) filter.$text = { $search: boundedQuery(req.query.search, 120) };
 
-  const [items, total] = await Promise.all([
+  const [items, total, user] = await Promise.all([
     Note.find(filter)
       .populate('user', 'name profilePicture trustScore')
       .sort({ createdAt: -1 })
       .skip(skip)
       .limit(limit),
-    Note.countDocuments(filter)
+    Note.countDocuments(filter),
+    User.findById(req.user.userId).select('bookmarkedNotes').lean()
   ]);
+
+  const bookmarks = new Set((user?.bookmarkedNotes || []).map(String));
+  const data = items.map((item) => {
+    const serialized = item.toObject();
+    const safeFile = isSafeNoteFileUrl(serialized.fileUrl);
+    return { ...serialized, fileUrl: safeFile ? serialized.fileUrl : null, isFileAvailable: safeFile, isBookmarked: bookmarks.has(String(item._id)) };
+  });
 
   res.json({
     success: true,
-    data: items,
+    data,
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
   });
 });
 
 export const toggleBookmarkNote = asyncHandler(async (req, res) => {
   const noteId = req.params.id;
+  if (!mongoose.isValidObjectId(noteId)) throw new BadRequest('Invalid note ID');
+  if (!(await Note.exists({ _id: noteId }))) throw new NotFound('Note not found');
 
-  const [user, note] = await Promise.all([User.findById(req.user.userId), Note.findById(noteId)]);
+  const userId = req.user.userId;
+  const alreadyBookmarked = await User.exists({ _id: userId, bookmarkedNotes: noteId });
+  const userUpdate = alreadyBookmarked
+    ? await User.updateOne({ _id: userId, bookmarkedNotes: noteId }, { $pull: { bookmarkedNotes: noteId } })
+    : await User.updateOne({ _id: userId, bookmarkedNotes: { $ne: noteId } }, { $addToSet: { bookmarkedNotes: noteId } });
+  if (!userUpdate.matchedCount) throw new NotFound('User not found');
 
-  if (!user) throw new NotFound('User not found');
-  if (!note) throw new NotFound('Note not found');
-
-  const existingIndex = user.bookmarkedNotes.findIndex((id) => id.toString() === noteId);
-
-  if (existingIndex > -1) {
-    user.bookmarkedNotes.splice(existingIndex, 1);
-    note.bookmarksCount = Math.max((note.bookmarksCount || 0) - 1, 0);
-    await Promise.all([user.save(), note.save()]);
-    return res.json({ success: true, message: 'Note removed from bookmarks' });
+  if (userUpdate.modifiedCount) {
+    await Note.updateOne(
+      { _id: noteId },
+      alreadyBookmarked
+        ? [{ $set: { bookmarksCount: { $max: [{ $subtract: [{ $ifNull: ['$bookmarksCount', 0] }, 1] }, 0] } } }]
+        : { $inc: { bookmarksCount: 1 } }
+    );
   }
 
-  user.bookmarkedNotes.push(note._id);
-  note.bookmarksCount += 1;
-  await Promise.all([user.save(), note.save()]);
-
-  res.json({ success: true, message: 'Note bookmarked' });
+  res.json({ success: true, bookmarked: !alreadyBookmarked, message: alreadyBookmarked ? 'Note removed from bookmarks' : 'Note bookmarked' });
 });

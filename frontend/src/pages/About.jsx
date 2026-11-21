@@ -4,7 +4,7 @@ import Layout from '../layouts/Layout';
 
 const steps = [
   ['Create your profile', 'Sign up with student details, add your course, semester, skills, interests, and campus context so other students know who they are dealing with.'],
-  ['Post or discover', 'Use Marketplace for items, Notes for academic material, Requests for borrowing or help, and Network for student connections.'],
+  ['Post or discover', 'Use Marketplace for campus resources, Community Requests for borrowing or help, and Network for student connections.'],
   ['Connect before exchanging', 'Send a connection request, wait for the other student to accept, then use chat to agree on price, timing, location, or academic help.'],
   ['Use reports when needed', 'If a student behaves badly in chat or posts unsafe content, submit a report. Admins can review, warn, block users, or hide listings.']
 ];
@@ -26,7 +26,7 @@ export default function About() {
             <section className="grid gap-6 lg:grid-cols-[1fr_0.8fr] lg:items-center">
               <div>
                 <p className="chip mb-4">How CampusSwap works</p>
-                <h1 className="text-section-title">A campus-first system for exchange, help, notes, and safer student communication.</h1>
+                <h1 className="text-section-title">A campus-first system for exchange, community help, and safer student communication.</h1>
                 <p className="mt-5 max-w-3xl text-body-sm">
                   CampusSwap is built around trust between students. Every major action has a clear owner: listing owners control their listings,
                   request owners decide when a request is fulfilled, recipients confirm connection requests, and admins handle reports.

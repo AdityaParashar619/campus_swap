@@ -8,7 +8,6 @@ import { authAPI } from '../services/api';
 const menuItems = [
   { title: 'Marketplace', desc: 'Buy, sell, and swap campus essentials', link: '/listings', key: 'MK', primary: true },
   { title: 'Saved listings', desc: 'Return to products you want to compare', link: '/saved-listings', key: 'SV', primary: true },
-  { title: 'Notes Exchange', desc: 'Share and discover semester notes', link: '/notes', key: 'NT' },
   { title: 'Borrow Requests', desc: 'Ask community for urgent help', link: '/bounties', key: 'RQ' },
   { title: 'Student Network', desc: 'Unlock trusted chat, contact sharing, and campus reputation', link: '/network', key: 'NW' },
   { title: 'Live Chat', desc: 'Continue conversations with other students', link: '/chat', key: 'CH', primary: true },
@@ -50,7 +49,7 @@ export default function Dashboard() {
             <header className="page-header">
               <p className="text-sm font-semibold text-blue-700 dark:text-blue-300">Student dashboard</p>
               <h1 className="text-section-title">Welcome back, {user?.name}</h1>
-              <p className="max-w-2xl text-body-sm">Manage listings, saved products, conversations, notes, and campus requests from one place.</p>
+              <p className="max-w-2xl text-body-sm">Manage listings, saved products, conversations, connections, and campus requests from one place.</p>
             </header>
 
             <section aria-labelledby="quick-actions-heading">

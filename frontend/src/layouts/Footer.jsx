@@ -19,7 +19,7 @@ export default function Footer() {
               <p className="text-xs font-semibold text-slate-400">Samrat Ashok Technological Institute</p>
             </div>
           </div>
-          <p className="mt-3 max-w-md text-sm leading-relaxed text-slate-300">Campus marketplace, requests, notes, chat, connections, and admin moderation in one student platform.</p>
+          <p className="mt-3 max-w-md text-sm leading-relaxed text-slate-300">Campus marketplace, community requests, chat, connections, and admin moderation in one student platform.</p>
           <a
             className="mt-3 inline-flex rounded-full border border-emerald-300/30 bg-emerald-400/10 px-3 py-1 text-xs font-bold text-emerald-100 hover:bg-emerald-400/15"
             href="https://www.satiengg.in/"

@@ -1,103 +1,40 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'framer-motion';
-import { Link, NavLink, useNavigate } from 'react-router-dom';
+import { useEffect, useRef, useState } from 'react';
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom';
 import satiLogo from '../assets/sati-logo.jpg';
 import NotificationPanel from '../components/NotificationPanel';
 import { useNotifications } from '../context/NotificationContext';
 import { useAuth } from '../hooks/useAuth';
-import { getAccountIdentity, getNavigationLinks } from '../utils/navigation';
+import { getAccountIdentity, getBrandDestination, getNavigationSections, isNavigationActive } from '../utils/navigation';
 import { formatUnreadCount } from '../utils/notifications';
 
-const Icon = ({ children, className = 'h-5 w-5' }) => <svg aria-hidden="true" className={className} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">{children}</svg>;
-const SunIcon = () => <Icon><path strokeLinecap="round" d="M12 3v2m0 14v2m9-9h-2M5 12H3m15.36 6.36-1.42-1.42M7.06 7.06 5.64 5.64m12.72 0-1.42 1.42M7.06 16.94l-1.42 1.42" /><circle cx="12" cy="12" r="4" /></Icon>;
-const MoonIcon = () => <Icon><path strokeLinecap="round" strokeLinejoin="round" d="M21 12.8A8.5 8.5 0 1 1 11.2 3 6.7 6.7 0 0 0 21 12.8Z" /></Icon>;
-const BellIcon = () => <Icon><path strokeLinecap="round" strokeLinejoin="round" d="M15 17H9m9-2v-4a6 6 0 0 0-12 0v4l-2 2h16l-2-2Zm-7 5h2" /></Icon>;
-const MenuIcon = ({ open }) => <Icon><path strokeLinecap="round" strokeLinejoin="round" d={open ? 'M6 6l12 12M18 6 6 18' : 'M4 7h16M4 12h16M4 17h16'} /></Icon>;
-const ChevronIcon = () => <Icon className="h-4 w-4"><path strokeLinecap="round" strokeLinejoin="round" d="m8 10 4 4 4-4" /></Icon>;
+const Icon = ({ children }) => <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">{children}</svg>;
+const Chevron = () => <Icon><path strokeLinecap="round" strokeLinejoin="round" d="m8 10 4 4 4-4" /></Icon>;
+const MenuIcon = ({ open }) => <Icon><path strokeLinecap="round" d={open ? 'M6 6l12 12M18 6 6 18' : 'M4 7h16M4 12h16M4 17h16'} /></Icon>;
+const activeClass = (active) => 'flex min-h-11 items-center rounded-lg px-3 text-sm font-bold ' + (active ? 'bg-white text-slate-950' : 'text-slate-200 hover:bg-slate-800');
+
+const Dropdown = ({ id, label, items, selected, setSelected, pathname }) => <div className="relative">
+  <button type="button" aria-expanded={selected === id} aria-controls={id} onClick={() => setSelected(selected === id ? '' : id)} className={activeClass(items.some((item) => item.href && isNavigationActive(pathname, item.href)))}>{label}<span className="ml-1"><Chevron /></span></button>
+  {selected === id && <div id={id} className="absolute left-0 top-12 z-50 w-64 rounded-xl border border-slate-200 bg-white p-2 text-slate-900 shadow-xl dark:border-slate-700 dark:bg-slate-900 dark:text-white">{items.map((item) => item.disabled ? <div key={item.label} aria-disabled="true" className="flex min-h-11 items-center justify-between rounded-lg px-3 py-2 text-sm text-slate-500"><span>{item.label}</span><span className="text-[10px] font-bold uppercase">Coming soon</span></div> : <NavLink key={item.href} to={item.href} onClick={() => setSelected('')} className={({ isActive }) => 'block min-h-11 rounded-lg px-3 py-3 text-sm font-semibold ' + (isActive ? 'bg-blue-50 text-blue-700 dark:bg-blue-950 dark:text-blue-200' : 'hover:bg-slate-100 dark:hover:bg-slate-800')}>{item.label}</NavLink>)}</div>}
+</div>;
 
 export default function Navbar() {
-  const { user, logout } = useAuth();
-  const navigate = useNavigate();
-  const reduceMotion = useReducedMotion();
-  const [navigationOpen, setNavigationOpen] = useState(false);
-  const [profileOpen, setProfileOpen] = useState(false);
-  const [notificationOpen, setNotificationOpen] = useState(false);
-  const { unreadCount } = useNotifications();
-  const navigationButtonRef = useRef(null);
-  const profileButtonRef = useRef(null);
-  const notificationButtonRef = useRef(null);
-  const navRef = useRef(null);
-  const links = useMemo(() => getNavigationLinks(user?.role), [user?.role]);
-  const [dark, setDark] = useState(() => {
-    const saved = localStorage.getItem('theme');
-    if (saved === 'dark') return true;
-    if (saved === 'light') return false;
-    return document.documentElement.classList.contains('dark');
-  });
-
-  useEffect(() => {
-    document.documentElement.classList.toggle('dark', dark);
-    localStorage.setItem('theme', dark ? 'dark' : 'light');
-  }, [dark]);
-
-  useEffect(() => {
-    if (!navigationOpen && !profileOpen && !notificationOpen) return undefined;
-    const onKeyDown = (event) => {
-      if (event.key !== 'Escape') return;
-      (notificationOpen ? notificationButtonRef : profileOpen ? profileButtonRef : navigationButtonRef).current?.focus();
-      setNavigationOpen(false); setProfileOpen(false); setNotificationOpen(false);
-    };
-    const onPointerDown = (event) => {
-      if (!navRef.current?.contains(event.target)) { setNavigationOpen(false); setProfileOpen(false); setNotificationOpen(false); }
-    };
-    document.addEventListener('keydown', onKeyDown);
-    document.addEventListener('pointerdown', onPointerDown);
-    return () => { document.removeEventListener('keydown', onKeyDown); document.removeEventListener('pointerdown', onPointerDown); };
-  }, [navigationOpen, profileOpen, notificationOpen]);
-
-  const { displayName, initials } = getAccountIdentity(user?.name);
-  const handleLogout = () => { setProfileOpen(false); logout(); navigate('/'); };
-
-  return (
-    <nav ref={navRef} aria-label="Primary navigation" className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950 text-white shadow-sm">
-      <div className="section-container flex h-16 items-center gap-2 sm:gap-3">
-        <Link to="/dashboard" className="flex min-w-0 shrink items-center gap-2" aria-label="CampusSwap dashboard">
-          <img src={satiLogo} alt="SATI logo" className="h-9 w-9 shrink-0 rounded-md border border-white/15 bg-white object-contain p-1" />
-          <span className="hidden min-w-0 leading-tight sm:block">
-            <span className="block truncate text-base font-extrabold tracking-tight sm:text-lg">CampusSwap</span>
-            <span className="hidden truncate text-[9px] font-semibold uppercase tracking-wider text-slate-400 lg:block">Samrat Ashok Technological Institute</span>
-          </span>
-        </Link>
-
-        <div className="ml-auto hidden min-w-0 items-center gap-0.5 min-[1440px]:flex">
-          {links.map((link) => <NavLink key={link.href} to={link.href} className={({ isActive }) => `whitespace-nowrap rounded-md px-2.5 py-2 text-sm font-semibold ${isActive ? 'bg-white text-slate-950' : 'text-slate-300 hover:bg-slate-800 hover:text-white'}`}>{link.label}</NavLink>)}
-        </div>
-
-        <div className="ml-auto flex shrink-0 items-center gap-1 min-[1440px]:ml-2 sm:gap-2">
-          <button ref={navigationButtonRef} type="button" className="control-icon min-[1440px]:hidden" aria-label={`${navigationOpen ? 'Close' : 'Open'} navigation menu`} aria-expanded={navigationOpen} aria-controls="compact-navigation" onClick={() => { setNavigationOpen((value) => !value); setProfileOpen(false); setNotificationOpen(false); }}><MenuIcon open={navigationOpen} /></button>
-          <div className="relative">
-            <button ref={notificationButtonRef} type="button" className="control-icon relative" aria-label={`Notifications${unreadCount ? `, ${unreadCount} unread` : ''}`} aria-expanded={notificationOpen} aria-controls="notification-panel" onClick={() => { setNotificationOpen((value) => !value); setNavigationOpen(false); setProfileOpen(false); }}><BellIcon />{unreadCount > 0 && <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[9px] font-bold leading-none">{formatUnreadCount(unreadCount)}</span>}</button>
-            <AnimatePresence>{notificationOpen && <motion.div initial={reduceMotion ? false : { opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }}><NotificationPanel onClose={() => { setNotificationOpen(false); notificationButtonRef.current?.focus(); }} /></motion.div>}</AnimatePresence>
-          </div>
-          <button type="button" onClick={() => setDark((value) => !value)} aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'} title={dark ? 'Use light theme' : 'Use dark theme'} className="control-icon">{dark ? <SunIcon /> : <MoonIcon />}</button>
-          <div className="relative">
-            <button ref={profileButtonRef} type="button" className="flex h-10 max-w-[9.5rem] items-center gap-2 rounded-lg border border-white/15 px-1.5 text-left hover:bg-slate-800 sm:max-w-[13rem] sm:pr-2" aria-label={`Account menu for ${displayName}`} aria-expanded={profileOpen} aria-controls="profile-menu" onClick={() => { setProfileOpen((value) => !value); setNavigationOpen(false); setNotificationOpen(false); }}>
-              <span className="grid h-7 w-7 shrink-0 place-items-center rounded-md bg-blue-600 text-xs font-bold">{initials}</span>
-              <span className="hidden min-w-0 flex-1 truncate text-sm font-semibold md:block">{displayName}</span>
-              <span className="hidden text-slate-400 sm:block"><ChevronIcon /></span>
-            </button>
-            <AnimatePresence>{profileOpen && <motion.div id="profile-menu" role="menu" initial={reduceMotion ? false : { opacity: 0, y: -4 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -4 }} className="absolute right-0 top-12 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white p-2 text-slate-900 shadow-xl dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
-              <div className="border-b border-slate-200 px-3 py-2 dark:border-slate-700"><p className="truncate text-sm font-bold">{displayName}</p><p className="truncate text-xs text-slate-500 dark:text-slate-400">{user?.email || 'CampusSwap account'}</p></div>
-              <Link role="menuitem" to="/profile" onClick={() => setProfileOpen(false)} className="mt-1 block rounded-md px-3 py-2 text-sm font-semibold hover:bg-slate-100 dark:hover:bg-slate-800">View profile</Link>
-              <button role="menuitem" type="button" onClick={handleLogout} className="w-full rounded-md px-3 py-2 text-left text-sm font-semibold text-rose-600 hover:bg-rose-50 dark:text-rose-300 dark:hover:bg-rose-950/40">Log out</button>
-            </motion.div>}</AnimatePresence>
-          </div>
-        </div>
+  const { user, logout } = useAuth(); const navigate = useNavigate(); const location = useLocation(); const { unreadCount } = useNotifications();
+  const [open, setOpen] = useState(''); const [dark, setDark] = useState(() => localStorage.getItem('theme') === 'dark' || document.documentElement.classList.contains('dark')); const navRef = useRef(null); const menuButton = useRef(null);
+  const sections = getNavigationSections(user?.role); const college = sections.find((s) => s.id === 'college-services')?.items || []; const community = sections.find((s) => s.id === 'student-community')?.items || []; const account = sections.find((s) => s.id === 'account')?.items || []; const { displayName, initials } = getAccountIdentity(user?.name);
+  useEffect(() => { document.documentElement.classList.toggle('dark', dark); localStorage.setItem('theme', dark ? 'dark' : 'light'); }, [dark]);
+  useEffect(() => { if (!open) return undefined; const key = (event) => { if (event.key === 'Escape') { setOpen(''); menuButton.current?.focus(); } }; const outside = (event) => { if (!navRef.current?.contains(event.target)) setOpen(''); }; document.addEventListener('keydown', key); document.addEventListener('pointerdown', outside); return () => { document.removeEventListener('keydown', key); document.removeEventListener('pointerdown', outside); }; }, [open]);
+  const signOut = async () => { setOpen(''); await logout(); navigate('/'); };
+  return <nav ref={navRef} aria-label="Primary navigation" className="sticky top-0 z-50 border-b border-slate-800 bg-slate-950 text-white shadow-sm">
+    <div className="section-container flex h-16 items-center gap-2">
+      <Link to={getBrandDestination(user)} aria-label={user ? 'CampusSwap dashboard' : 'CampusSwap home'} className="flex shrink-0 items-center gap-2 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-400"><img src={satiLogo} alt="" className="h-9 w-9 rounded-md border border-white/15 bg-white object-contain p-1" /><span className="hidden text-lg font-black sm:block">CampusSwap</span></Link>
+      <div className="ml-auto hidden items-center gap-1 min-[1180px]:flex"><NavLink to="/listings" className={() => activeClass(isNavigationActive(location.pathname, '/listings'))}>Marketplace</NavLink><Dropdown id="college-menu" label="College Services" items={college} selected={open} setSelected={setOpen} pathname={location.pathname} /><Dropdown id="community-menu" label="Student Community" items={community.filter((item) => item.href !== '/listings')} selected={open} setSelected={setOpen} pathname={location.pathname} /></div>
+      <div className="ml-auto flex shrink-0 items-center gap-1 min-[1180px]:ml-2">
+        <button ref={menuButton} type="button" className="control-icon min-[1180px]:hidden" aria-label={(open === 'mobile' ? 'Close' : 'Open') + ' navigation menu'} aria-expanded={open === 'mobile'} aria-controls="mobile-navigation" onClick={() => setOpen(open === 'mobile' ? '' : 'mobile')}><MenuIcon open={open === 'mobile'} /></button>
+        <div className="relative"><button type="button" className="control-icon relative" aria-label={'Notifications' + (unreadCount ? ', ' + unreadCount + ' unread' : '')} aria-expanded={open === 'notifications'} onClick={() => setOpen(open === 'notifications' ? '' : 'notifications')}><Icon><path d="M15 17H9m9-2v-4a6 6 0 0 0-12 0v4l-2 2h16l-2-2" /></Icon>{unreadCount > 0 && <span className="absolute -right-1 -top-1 grid h-4 min-w-4 place-items-center rounded-full bg-rose-500 px-1 text-[9px]">{formatUnreadCount(unreadCount)}</span>}</button>{open === 'notifications' && <NotificationPanel onClose={() => setOpen('')} />}</div>
+        <button type="button" onClick={() => setDark((value) => !value)} aria-label={dark ? 'Switch to light theme' : 'Switch to dark theme'} className="control-icon"><Icon><circle cx="12" cy="12" r="4" /><path d="M12 2v2m0 16v2M2 12h2m16 0h2" /></Icon></button>
+        <div className="relative"><button type="button" aria-label={'Account menu for ' + displayName} aria-expanded={open === 'account'} aria-controls="account-menu" onClick={() => setOpen(open === 'account' ? '' : 'account')} className="flex h-10 items-center gap-2 rounded-lg border border-white/15 px-1.5 hover:bg-slate-800"><span className="grid h-7 w-7 place-items-center rounded-md bg-blue-600 text-xs font-bold">{initials}</span><span className="hidden max-w-24 truncate text-sm font-bold min-[1360px]:block">{displayName}</span><span className="hidden sm:block"><Chevron /></span></button>{open === 'account' && <div id="account-menu" className="absolute right-0 top-12 w-64 rounded-xl border border-slate-200 bg-white p-2 text-slate-900 shadow-xl dark:border-slate-700 dark:bg-slate-900 dark:text-white"><div className="border-b p-2 dark:border-slate-700"><p className="truncate font-bold">{displayName}</p><p className="truncate text-xs text-slate-500">{user?.email}</p></div>{account.map((item) => <Link key={item.href} to={item.href} onClick={() => setOpen('')} className="block min-h-11 rounded-lg px-3 py-3 text-sm font-semibold hover:bg-slate-100 dark:hover:bg-slate-800">{item.label}</Link>)}<button type="button" onClick={signOut} className="min-h-11 w-full rounded-lg px-3 text-left text-sm font-bold text-rose-600 hover:bg-rose-50">Log out</button></div>}</div>
       </div>
-
-      <AnimatePresence>{navigationOpen && <motion.div id="compact-navigation" initial={reduceMotion ? false : { opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} className="overflow-hidden border-t border-slate-800 min-[1440px]:hidden">
-        <div className="section-container grid gap-1 py-3 sm:grid-cols-2 lg:grid-cols-3">{links.map((link) => <NavLink key={link.href} to={link.href} onClick={() => setNavigationOpen(false)} className={({ isActive }) => `min-h-11 rounded-lg px-3 py-2.5 text-sm font-semibold ${isActive ? 'bg-white text-slate-950' : 'text-slate-200 hover:bg-slate-800 hover:text-white'}`}>{link.label}</NavLink>)}</div>
-      </motion.div>}</AnimatePresence>
-    </nav>
-  );
+    </div>
+    {open === 'mobile' && <div id="mobile-navigation" className="border-t border-slate-800 min-[1180px]:hidden"><div className="section-container max-h-[calc(100vh-4rem)] space-y-4 overflow-y-auto py-4"><Link to="/listings" onClick={() => setOpen('')} className="block min-h-11 rounded-lg px-3 py-3 font-bold hover:bg-slate-800">Marketplace</Link>{sections.filter((section) => section.id !== 'account').map((section) => <section key={section.id}><h2 className="px-3 text-xs font-black uppercase tracking-wider text-slate-400">{section.label}</h2><div className="mt-2 grid gap-1 sm:grid-cols-2">{section.items.filter((item) => item.href !== '/listings').map((item) => item.disabled ? <div key={item.label} aria-disabled="true" className="flex min-h-11 items-center justify-between rounded-lg px-3 py-3 text-slate-500"><span>{item.label}</span><span className="text-xs">Coming soon</span></div> : <NavLink key={item.href} to={item.href} onClick={() => setOpen('')} className="min-h-11 rounded-lg px-3 py-3 font-semibold hover:bg-slate-800">{item.label}</NavLink>)}</div></section>)}</div></div>}
+  </nav>;
 }

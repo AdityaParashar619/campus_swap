@@ -7,6 +7,7 @@ import { errorHandler } from './middleware/errorMiddleware.js';
 import { requestMetaMiddleware } from './middleware/requestMiddleware.js';
 import { securityMiddleware } from './middleware/securityMiddleware.js';
 import adminRoutes from './routes/adminRoutes.js';
+import academicRoutes from './routes/academicRoutes.js';
 import authRoutes from './routes/authRoutes.js';
 import bountyRoutes from './routes/bountyRoutes.js';
 import connectionRoutes from './routes/connectionRoutes.js';
@@ -71,6 +72,7 @@ export const createApp = ({ databaseMiddleware = requireDatabase } = {}) => {
 
   app.use('/api', databaseMiddleware);
   app.use('/api/auth', authRoutes);
+  app.use('/api/academic', academicRoutes);
   app.use('/api/listings', listingRoutes);
   app.use('/api/bounties', bountyRoutes);
   app.use('/api/messages', messageRoutes);
