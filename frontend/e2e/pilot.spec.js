@@ -47,7 +47,8 @@ test('two isolated students register, retain academic identity, connect, and rem
     const navigation = pageA.locator('#mobile-navigation');
     await expect(navigation.getByRole('heading', { name: 'College Services' })).toBeVisible();
     await expect(navigation.getByRole('link', { name: 'My Department' })).toBeVisible();
-    for (const label of ['Notice Board', 'Campus Map', 'Campus Issues']) {
+    await expect(navigation.getByRole('link', { name: 'Notice Board' })).toBeVisible();
+    for (const label of ['Campus Map', 'Campus Issues']) {
       await expect(navigation.locator('[aria-disabled="true"]').filter({ hasText: label })).toBeVisible();
     }
     await expect(navigation.getByRole('link', { name: 'Notes' })).toBeVisible();
@@ -77,6 +78,9 @@ test('two isolated students register, retain academic identity, connect, and rem
   await pageA.getByRole('button', { name: 'College Services' }).click();
   await pageA.getByRole('link', { name: 'My Department' }).click();
   await expect(pageA.getByRole('heading', { name: 'My Department' })).toBeVisible();
+  await pageA.goto('/notices');
+  await expect(pageA.getByRole('heading', { name: 'Campus Notice Board' })).toBeVisible();
+  await expect(pageA.getByText('No notices available')).toBeVisible();
   await pageA.goto('/notes');
   await expect(pageA.getByRole('heading', { name: 'Notes Exchange' })).toBeVisible();
   await expect(pageA.getByRole('button', { name: 'Upload Note' })).toBeVisible();
@@ -106,7 +110,7 @@ test('two isolated students register, retain academic identity, connect, and rem
 });
 
 test('administrator publishes and retires a development fixture while student isolation holds', async ({ page, request }) => {
-  test.setTimeout(90_000);
+  test.setTimeout(120_000);
   page.on('dialog', (dialog) => dialog.accept());
   await page.goto('/login');
   await page.locator('input[type="email"]').fill(adminEmail);
@@ -116,6 +120,36 @@ test('administrator publishes and retires a development fixture while student is
   await page.getByRole('button', { name: /Account menu for/i }).click();
   await page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'Admin' }).click();
   await page.getByRole('link', { name: 'Academic resources' }).click();
+  await expect(page.getByRole('heading', { name: 'Academic Resources' })).toBeVisible();
+  const adminLogin = await request.post('http://127.0.0.1:5100/api/auth/login', { data: { email: adminEmail, password } });
+  const adminToken = (await adminLogin.json()).token;
+  await page.goto('/admin/notices');
+  await expect(page.getByRole('heading', { name: 'Notice Management' })).toBeVisible();
+  await page.getByLabel('Title').fill('Draft Synthetic CSE Semester 7 Notice');
+  await page.getByLabel('Content').fill('Complete the form before Friday. <script>alert(1)</script>');
+  await page.getByLabel('Category', { exact: true }).selectOption('examination');
+  await page.getByLabel('Priority').selectOption('urgent');
+  await page.getByLabel('Target scope').selectOption('semester');
+  await page.getByLabel('Computer Science and Engineering', { exact: true }).check();
+  await page.getByLabel('Semester').selectOption('7');
+  await page.getByText('Optional links and expiration', { exact: true }).click();
+  await page.getByLabel('Attachment HTTPS URL').fill('https://fixtures.invalid/exam-form.pdf');
+  await page.getByLabel('Attachment label').fill('Open exam form');
+  await page.getByLabel('Expiration date and time').fill('2027-01-15T10:30');
+  await page.getByRole('button', { name: 'Save Draft' }).click();
+  await expect(page.getByText('Notice saved as a draft.')).toBeVisible();
+  let noticeCard = page.locator('article').filter({ hasText: 'Draft Synthetic CSE Semester 7 Notice' });
+  await expect(noticeCard.getByText('draft', { exact: true })).toBeVisible();
+  await noticeCard.getByRole('button', { name: 'Edit' }).click();
+  await page.getByLabel('Title').fill('Synthetic CSE Semester 7 Notice');
+  await expect(page.getByLabel('Expiration date and time')).toHaveValue('2027-01-15T10:30');
+  await page.getByRole('button', { name: 'Save Changes' }).click();
+  await expect(page.getByText('Notice changes saved.')).toBeVisible();
+  noticeCard = page.locator('article').filter({ hasText: 'Synthetic CSE Semester 7 Notice' });
+  await noticeCard.getByRole('button', { name: 'Publish' }).click();
+  await expect(page.getByText('Notice published.')).toBeVisible();
+  await expect(noticeCard.getByText('published', { exact: true })).toBeVisible();
+  await page.goto('/admin/academic-resources');
   await expect(page.getByRole('heading', { name: 'Academic Resources' })).toBeVisible();
   await page.getByLabel('Title').fill('Synthetic E2E CSE Semester 7 Reference');
   await page.getByLabel('Official HTTPS URL').fill('https://fixtures.invalid/cse-semester-7-reference.pdf');
@@ -150,6 +184,21 @@ test('administrator publishes and retires a development fixture while student is
   await page.locator('input[type="password"]').fill(password);
   await page.getByRole('button', { name: 'Login' }).click();
   await expect(page).toHaveURL(/dashboard/);
+  await page.goto('/admin/notices');
+  await expect(page).toHaveURL(/dashboard/);
+  await page.goto('/notices');
+  await expect(page.getByRole('heading', { name: 'Campus Notice Board' })).toBeVisible();
+  await expect(page.getByText('Synthetic CSE Semester 7 Notice')).toBeVisible();
+  await expect(page.getByText('Published on CampusSwap')).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 900 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+  await page.getByRole('link', { name: 'View Details' }).click();
+  await expect(page).toHaveURL(/\/notices\/[a-f0-9]{24}$/);
+  const noticeId = new URL(page.url()).pathname.split('/').pop();
+  await expect(page.getByRole('heading', { name: 'Synthetic CSE Semester 7 Notice' })).toBeVisible();
+  await expect(page.getByText('<script>alert(1)</script>', { exact: false })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Open exam form' })).toHaveAttribute('href', 'https://fixtures.invalid/exam-form.pdf');
+  await expect(page.getByRole('button', { name: /Publish|Archive|Edit/ })).toHaveCount(0);
   await page.goto('/my-department');
   await expect(page.getByText('Synthetic E2E CSE Semester 7 Reference')).toBeVisible();
   await expect(page.getByText('Published resource', { exact: true })).toBeVisible();
@@ -164,6 +213,8 @@ test('administrator publishes and retires a development fixture while student is
   const studentToken = (await studentLogin.json()).token;
   const forbidden = await request.post('http://127.0.0.1:5100/api/admin/academic-resources', { headers: { Authorization: `Bearer ${studentToken}` }, data: { title: 'Forbidden' } });
   expect(forbidden.status()).toBe(403);
+  const forbiddenNotice = await request.post('http://127.0.0.1:5100/api/admin/notices', { headers: { Authorization: `Bearer ${studentToken}` }, data: { title: 'Forbidden', content: 'Forbidden' } });
+  expect(forbiddenNotice.status()).toBe(403);
 
   await page.getByRole('button', { name: /Account menu for/i }).click();
   await page.getByRole('button', { name: 'Log out' }).click();
@@ -174,6 +225,9 @@ test('administrator publishes and retires a development fixture while student is
   await page.goto('/admin/academic-resources');
   await page.locator('article').filter({ hasText: 'Synthetic E2E CSE Semester 7 Reference' }).getByRole('button', { name: 'Retire' }).click();
   await expect(page.locator('article').filter({ hasText: 'Synthetic E2E CSE Semester 7 Reference' }).getByText(/Retired/)).toBeVisible();
+  await page.goto('/admin/notices');
+  await page.locator('article').filter({ hasText: 'Synthetic CSE Semester 7 Notice' }).getByRole('button', { name: 'Archive' }).click();
+  await expect(page.getByText('Notice archived.')).toBeVisible();
 
   await page.getByRole('button', { name: /Account menu for/i }).click();
   await page.getByRole('button', { name: 'Log out' }).click();
@@ -183,6 +237,27 @@ test('administrator publishes and retires a development fixture while student is
   await expect(page).toHaveURL(/dashboard/);
   await page.goto('/my-department');
   await expect(page.getByText('Synthetic E2E CSE Semester 7 Reference')).toHaveCount(0);
+  await page.goto('/notices');
+  await expect(page.getByText('Synthetic CSE Semester 7 Notice')).toHaveCount(0);
+  await page.getByRole('button', { name: /Account menu for/i }).click();
+  await page.getByRole('button', { name: 'Log out' }).click();
+  await page.locator('input[type="email"]').fill(adminEmail);
+  await page.locator('input[type="password"]').fill(password);
+  await page.getByRole('button', { name: 'Login' }).click();
+  await expect(page).toHaveURL(/dashboard/);
+  await page.goto('/admin/notices');
+  await page.locator('article').filter({ hasText: 'Synthetic CSE Semester 7 Notice' }).getByRole('button', { name: 'Republish' }).click();
+  await expect(page.getByText('Notice republished.')).toBeVisible();
+  await page.getByRole('button', { name: /Account menu for/i }).click();
+  await page.getByRole('button', { name: 'Log out' }).click();
+  await page.locator('input[type="email"]').fill(students[0].email);
+  await page.locator('input[type="password"]').fill(password);
+  await page.getByRole('button', { name: 'Login' }).click();
+  await expect(page).toHaveURL(/dashboard/);
+  await page.goto('/notices');
+  await expect(page.getByText('Synthetic CSE Semester 7 Notice')).toBeVisible();
+  const noticeArchived = await request.post(`http://127.0.0.1:5100/api/admin/notices/${noticeId}/archive`, { headers: { Authorization: `Bearer ${adminToken}` }, data: {} });
+  expect(noticeArchived.status()).toBe(200);
 });
 
 for (const width of [320, 390, 768, 1280, 1920]) {

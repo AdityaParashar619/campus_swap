@@ -168,6 +168,8 @@ export const env = {
   databaseRetryIntervalMs: Number(process.env.DATABASE_RETRY_INTERVAL_MS) || 30000,
   rateLimitWindowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,
   rateLimitMax: Number(process.env.RATE_LIMIT_MAX) || 200,
+  authRateLimitMax: Number(process.env.AUTH_RATE_LIMIT_MAX) || 10,
+  refreshRateLimitMax: Number(process.env.REFRESH_RATE_LIMIT_MAX) || 10,
   seedOnStartup: process.env.SEED_ON_STARTUP === 'true',
   adminEmail,
   adminPassword,

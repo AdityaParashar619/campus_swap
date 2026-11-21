@@ -5,7 +5,7 @@ import { BASE_NAVIGATION, COLLEGE_SERVICE_ITEMS, getAccountIdentity, getBrandDes
 
 test('student navigation includes Notes under Student Community without adding Dashboard', () => {
   const links = getNavigationLinks('student');
-  for (const href of ['/listings', '/my-listings', '/saved-listings', '/chat', '/network', '/bounties', '/notes', '/profile']) {
+  for (const href of ['/notices', '/listings', '/my-listings', '/saved-listings', '/chat', '/network', '/bounties', '/notes', '/profile']) {
     assert.equal(links.some((link) => link.href === href), true, `${href} should remain navigable`);
   }
   assert.equal(links.some((link) => link.href === '/admin'), false);
@@ -14,13 +14,14 @@ test('student navigation includes Notes under Student Community without adding D
   assert.equal(getBrandDestination(null), '/');
 });
 
-test('College Services enables My Department while keeping future modules unavailable', () => {
+test('College Services enables My Department and Notice Board while keeping future modules unavailable', () => {
   const section = getNavigationSections('student').find((item) => item.id === 'college-services');
   assert.equal(section.status, undefined);
   assert.deepEqual(section.items, COLLEGE_SERVICE_ITEMS);
   assert.deepEqual(section.items.map((item) => item.label), ['My Department', 'Notice Board', 'Campus Map', 'Campus Issues']);
   assert.deepEqual(section.items[0], { href: '/my-department', label: 'My Department' });
-  assert.equal(section.items.slice(1).every((item) => item.disabled && !item.href), true);
+  assert.deepEqual(section.items[1], { href: '/notices', label: 'Notice Board' });
+  assert.equal(section.items.slice(2).every((item) => item.disabled && !item.href), true);
 });
 
 test('each supported administrator role receives the role-protected admin destination', () => {
@@ -44,7 +45,7 @@ test('Notes route restores the existing workflow behind the protected route', ()
 test('navigation results cannot mutate the shared primary navigation definition', () => {
   const links = getNavigationLinks('student');
   links.pop();
-  assert.equal(BASE_NAVIGATION.length, 10);
+  assert.equal(BASE_NAVIGATION.length, 11);
 });
 
 test('account identity normalizes display names and produces bounded initials', () => {

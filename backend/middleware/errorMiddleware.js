@@ -9,6 +9,11 @@ export const errorHandler = (err, req, res, next) => {
   let message = error.message || 'Internal Server Error';
   let details = error.details || {};
 
+  if (error.name === 'MulterError') {
+    status = error.code === 'LIMIT_FILE_SIZE' ? 413 : 400;
+    message = error.code === 'LIMIT_FILE_SIZE' ? 'Each attachment must be 10 MB or smaller.' : 'Attachment upload exceeds the allowed file limits.';
+  }
+
   if (status < 400 || status > 599) status = 500;
   if (error.name === 'ValidationError') status = 400;
   if (error.name === 'ValidationError') {

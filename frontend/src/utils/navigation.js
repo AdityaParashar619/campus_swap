@@ -3,7 +3,7 @@ const freezeItems = (items) => Object.freeze(items.map((item) => Object.freeze(i
 
 export const COLLEGE_SERVICE_ITEMS = freezeItems([
   { href: '/my-department', label: 'My Department' },
-  { label: 'Notice Board', disabled: true, status: 'Coming soon' },
+  { href: '/notices', label: 'Notice Board' },
   { label: 'Campus Map', disabled: true, status: 'Coming soon' },
   { label: 'Campus Issues', disabled: true, status: 'Coming soon' }
 ]);

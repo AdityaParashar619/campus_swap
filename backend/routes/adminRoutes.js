@@ -14,10 +14,23 @@ import { requirePermission } from '../middleware/permissionMiddleware.js';
 import { getUserAdminView, listAlumniVerifications, reviewAlumniVerification, searchUsers, updateUserRole, updateUserStatus } from '../controllers/iamAdminController.js';
 import { createAcademicResource, listAcademicResources, setAcademicResourceStatus, updateAcademicResource } from '../controllers/academicAdminController.js';
 import { requireRole } from '../middleware/authMiddleware.js';
+import { archiveNotice, createNotice, getAdminNotice, listAdminNotices, publishNotice, removeAttachment, updateNotice, uploadAttachments } from '../controllers/noticeAdminController.js';
+import { creationLimiter } from '../middleware/securityMiddleware.js';
+import { noticeAttachmentUploadMiddleware } from '../middleware/noticeAttachmentUploadMiddleware.js';
 
 const router = express.Router();
 
 router.use(authMiddleware);
+
+const noticeAdmin = requireRole('admin', 'college_admin', 'super_admin');
+router.post('/notices', noticeAdmin, creationLimiter, createNotice);
+router.get('/notices', noticeAdmin, listAdminNotices);
+router.get('/notices/:id', noticeAdmin, getAdminNotice);
+router.patch('/notices/:id', noticeAdmin, updateNotice);
+router.post('/notices/:id/attachments', noticeAdmin, creationLimiter, noticeAttachmentUploadMiddleware, uploadAttachments);
+router.delete('/notices/:id/attachments/:attachmentId', noticeAdmin, removeAttachment);
+router.post('/notices/:id/publish', noticeAdmin, publishNotice);
+router.post('/notices/:id/archive', noticeAdmin, archiveNotice);
 
 router.get('/academic-resources', requireRole('admin', 'college_admin', 'super_admin'), listAcademicResources);
 router.post('/academic-resources', requireRole('admin', 'college_admin', 'super_admin'), createAcademicResource);

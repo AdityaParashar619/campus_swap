@@ -93,6 +93,11 @@ export const academicAPI = {
   getMyResources: (config) => API.get('/academic/my-resources', config)
 };
 
+export const noticeAPI = {
+  getAll: (params, options = {}) => API.get('/notices', { params, signal: options.signal }),
+  getById: (id, options = {}) => API.get(`/notices/${id}`, { signal: options.signal })
+};
+
 export const listingAPI = {
   getAll: (params, options = {}) => API.get('/listings', { params, signal: options.signal }),
   getById: (id, options = {}) => API.get(`/listings/${id}`, { signal: options.signal }),
@@ -165,6 +170,17 @@ export const adminAPI = {
   ,createAcademicResource: (data) => API.post('/admin/academic-resources', data)
   ,updateAcademicResource: (id, data) => API.patch(`/admin/academic-resources/${id}`, data)
   ,setAcademicResourceStatus: (id, data) => API.patch(`/admin/academic-resources/${id}/status`, data)
+  ,notices: (params, options = {}) => API.get('/admin/notices', { params, signal: options.signal })
+  ,notice: (id, options = {}) => API.get(`/admin/notices/${id}`, { signal: options.signal })
+  ,createNotice: (data) => API.post('/admin/notices', data)
+  ,updateNotice: (id, data) => API.patch(`/admin/notices/${id}`, data)
+  ,uploadNoticeAttachments: (id, files, onUploadProgress) => {
+    const form = new FormData(); files.forEach((file) => form.append('attachments', file));
+    return API.post(`/admin/notices/${id}/attachments`, form, { onUploadProgress });
+  }
+  ,removeNoticeAttachment: (noticeId, attachmentId) => API.delete(`/admin/notices/${noticeId}/attachments/${attachmentId}`)
+  ,publishNotice: (id) => API.post(`/admin/notices/${id}/publish`, {})
+  ,archiveNotice: (id) => API.post(`/admin/notices/${id}/archive`, {})
 };
 
 export const messageAPI = {

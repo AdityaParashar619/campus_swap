@@ -9,6 +9,7 @@ import { useAuth } from './hooks/useAuth';
 const Admin = lazy(() => import('./pages/Admin'));
 const AdminUsers = lazy(() => import('./pages/AdminUsers'));
 const AdminAcademicResources = lazy(() => import('./pages/AdminAcademicResources'));
+const AdminNotices = lazy(() => import('./pages/AdminNotices'));
 const About = lazy(() => import('./pages/About'));
 const Bounties = lazy(() => import('./pages/Bounties'));
 const Chat = lazy(() => import('./pages/Chat'));
@@ -26,6 +27,8 @@ const Login = lazy(() => import('./pages/Login'));
 const Network = lazy(() => import('./pages/Network'));
 const Notes = lazy(() => import('./pages/Notes'));
 const Notifications = lazy(() => import('./pages/Notifications'));
+const NoticeBoard = lazy(() => import('./pages/NoticeBoard'));
+const NoticeDetails = lazy(() => import('./pages/NoticeDetails'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const Profile = lazy(() => import('./pages/Profile'));
 const StudentProfile = lazy(() => import('./pages/StudentProfile'));
@@ -75,6 +78,8 @@ function AppContent() {
           <Route path="/bounties" element={<ProtectedRoute><Bounties /></ProtectedRoute>} />
           <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
+          <Route path="/notices" element={<ProtectedRoute><NoticeBoard /></ProtectedRoute>} />
+          <Route path="/notices/:id" element={<ProtectedRoute><NoticeDetails /></ProtectedRoute>} />
           <Route path="/about" element={<ProtectedRoute><About /></ProtectedRoute>} />
           <Route path="/feedback" element={<ProtectedRoute><Feedback /></ProtectedRoute>} />
           <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
@@ -82,6 +87,7 @@ function AppContent() {
           <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
           <Route path="/admin/users" element={<AdminRoute iam><AdminUsers /></AdminRoute>} />
           <Route path="/admin/academic-resources" element={<AdminRoute><AdminAcademicResources /></AdminRoute>} />
+          <Route path="/admin/notices" element={<AdminRoute><AdminNotices /></AdminRoute>} />
           <Route path="/error" element={<Error />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

@@ -23,7 +23,7 @@ export const securityMiddleware = [
 
 export const authAttemptLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: env.authRateLimitMax,
   standardHeaders: true,
   legacyHeaders: false,
   message: { success: false, message: 'Too many authentication attempts. Try again later.' }
@@ -31,7 +31,7 @@ export const authAttemptLimiter = rateLimit({
 
 export const refreshAttemptLimiter = rateLimit({
   windowMs: 15 * 60 * 1000,
-  max: 10,
+  max: env.refreshRateLimitMax,
   standardHeaders: true,
   legacyHeaders: false,
   skip: (req) => !req.cookies?.refreshToken,
