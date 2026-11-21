@@ -1,0 +1,7 @@
+import { Link } from 'react-router-dom';
+import { PageTransition, PremiumCard } from '../components/ui';
+import Layout from '../layouts/Layout';
+
+export default function NotesRetired() {
+  return <PageTransition><Layout><main className="page-shell min-h-[calc(100vh-4rem)]"><div className="section-container max-w-3xl"><PremiumCard hover={false} className="p-6 sm:p-8"><p className="text-sm font-bold uppercase tracking-wide text-amber-700 dark:text-amber-300">Feature retired</p><h1 className="text-section-title mt-2">Notes Exchange is no longer active</h1><p className="text-body-sm mt-3">Existing notes and bookmarks are preserved. No files or account data were removed. Use Marketplace for student resources or Community Requests when you need academic material.</p><div className="mt-6 flex flex-col gap-3 sm:flex-row"><Link className="rounded-lg bg-blue-600 px-4 py-2.5 text-center text-sm font-bold text-white hover:bg-blue-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500" to="/listings">Go to Marketplace</Link><Link className="rounded-lg border border-slate-300 px-4 py-2.5 text-center text-sm font-bold text-slate-800 hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:border-slate-600 dark:text-slate-100 dark:hover:bg-slate-800" to="/bounties">View Community Requests</Link></div></PremiumCard></div></main></Layout></PageTransition>;
+}

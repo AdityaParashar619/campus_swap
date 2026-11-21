@@ -8,6 +8,7 @@ import { useAuth } from './hooks/useAuth';
 
 const Admin = lazy(() => import('./pages/Admin'));
 const AdminUsers = lazy(() => import('./pages/AdminUsers'));
+const AdminAcademicResources = lazy(() => import('./pages/AdminAcademicResources'));
 const About = lazy(() => import('./pages/About'));
 const Bounties = lazy(() => import('./pages/Bounties'));
 const Chat = lazy(() => import('./pages/Chat'));
@@ -19,6 +20,7 @@ const Landing = lazy(() => import('./pages/Landing'));
 const Listings = lazy(() => import('./pages/Listings'));
 const ListingDetails = lazy(() => import('./pages/ListingDetails'));
 const MyListings = lazy(() => import('./pages/MyListings'));
+const MyDepartment = lazy(() => import('./pages/MyDepartment'));
 const SavedListings = lazy(() => import('./pages/SavedListings'));
 const Login = lazy(() => import('./pages/Login'));
 const Network = lazy(() => import('./pages/Network'));
@@ -66,6 +68,7 @@ function AppContent() {
           <Route path="/listings" element={<ProtectedRoute><Listings /></ProtectedRoute>} />
           <Route path="/listings/:id" element={<ProtectedRoute><ListingDetails /></ProtectedRoute>} />
           <Route path="/my-listings" element={<ProtectedRoute><MyListings /></ProtectedRoute>} />
+          <Route path="/my-department" element={<ProtectedRoute><MyDepartment /></ProtectedRoute>} />
           <Route path="/saved-listings" element={<ProtectedRoute><SavedListings /></ProtectedRoute>} />
           <Route path="/notes" element={<ProtectedRoute><Notes /></ProtectedRoute>} />
           <Route path="/network" element={<ProtectedRoute><Network /></ProtectedRoute>} />
@@ -78,6 +81,7 @@ function AppContent() {
           <Route path="/students/:id" element={<ProtectedRoute><StudentProfile /></ProtectedRoute>} />
           <Route path="/admin" element={<AdminRoute><Admin /></AdminRoute>} />
           <Route path="/admin/users" element={<AdminRoute iam><AdminUsers /></AdminRoute>} />
+          <Route path="/admin/academic-resources" element={<AdminRoute><AdminAcademicResources /></AdminRoute>} />
           <Route path="/error" element={<Error />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

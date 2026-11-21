@@ -4,7 +4,7 @@ import { authMiddleware } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
-router.get('/', getNotes);
+router.get('/', authMiddleware, getNotes);
 router.post('/', authMiddleware, createNote);
 router.post('/:id/bookmark', authMiddleware, toggleBookmarkNote);
 

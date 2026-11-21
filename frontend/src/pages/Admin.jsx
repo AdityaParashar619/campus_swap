@@ -75,6 +75,7 @@ export default function Admin() {
             <div>
               <p className="chip mb-3">Admin controls</p>
               {['college_admin', 'super_admin'].includes(user?.role) && <Link to="/admin/users" className="inline-flex mb-4 rounded-lg bg-indigo-600 px-4 py-2 font-semibold text-white">Identity and user management</Link>}
+              <Link to="/admin/academic-resources" className="ml-2 inline-flex mb-4 rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white">Academic resources</Link>
               <h1 className="text-section-title">Moderation Command Center</h1>
               <p className="text-body-sm mt-2">Review reports, block abusive users, and hide unsafe listings.</p>
             </div>

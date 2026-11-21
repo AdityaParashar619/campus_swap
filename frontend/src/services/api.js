@@ -89,6 +89,10 @@ export const authAPI = {
   }
 };
 
+export const academicAPI = {
+  getMyResources: (config) => API.get('/academic/my-resources', config)
+};
+
 export const listingAPI = {
   getAll: (params, options = {}) => API.get('/listings', { params, signal: options.signal }),
   getById: (id, options = {}) => API.get(`/listings/${id}`, { signal: options.signal }),
@@ -157,6 +161,10 @@ export const adminAPI = {
   updateIamRole: (id, data) => API.patch(`/admin/iam/users/${id}/role`, data),
   alumniVerifications: () => API.get('/admin/iam/verifications/alumni'),
   reviewAlumni: (id, data) => API.patch(`/admin/iam/verifications/alumni/${id}`, data)
+  ,academicResources: (params) => API.get('/admin/academic-resources', { params })
+  ,createAcademicResource: (data) => API.post('/admin/academic-resources', data)
+  ,updateAcademicResource: (id, data) => API.patch(`/admin/academic-resources/${id}`, data)
+  ,setAcademicResourceStatus: (id, data) => API.patch(`/admin/academic-resources/${id}/status`, data)
 };
 
 export const messageAPI = {

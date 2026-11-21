@@ -12,10 +12,17 @@ import {
 import { authMiddleware } from '../middleware/authMiddleware.js';
 import { requirePermission } from '../middleware/permissionMiddleware.js';
 import { getUserAdminView, listAlumniVerifications, reviewAlumniVerification, searchUsers, updateUserRole, updateUserStatus } from '../controllers/iamAdminController.js';
+import { createAcademicResource, listAcademicResources, setAcademicResourceStatus, updateAcademicResource } from '../controllers/academicAdminController.js';
+import { requireRole } from '../middleware/authMiddleware.js';
 
 const router = express.Router();
 
 router.use(authMiddleware);
+
+router.get('/academic-resources', requireRole('admin', 'college_admin', 'super_admin'), listAcademicResources);
+router.post('/academic-resources', requireRole('admin', 'college_admin', 'super_admin'), createAcademicResource);
+router.patch('/academic-resources/:id', requireRole('admin', 'college_admin', 'super_admin'), updateAcademicResource);
+router.patch('/academic-resources/:id/status', requireRole('admin', 'college_admin', 'super_admin'), setAcademicResourceStatus);
 
 router.get('/iam/users', requirePermission('users:read'), searchUsers);
 router.get('/iam/users/:id', requirePermission('users:read'), getUserAdminView);

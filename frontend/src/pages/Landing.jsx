@@ -11,8 +11,8 @@ const faqs = [
     a: 'Yes. The platform is designed for campus-first trust, with verified student access and local interactions.'
   },
   {
-    q: 'Can students use it for both items and notes?',
-    a: 'Absolutely. CampusSwap supports listings, notes exchange, requests, networking, and real-time chat in one app.'
+    q: 'Can students use it for items and campus help?',
+    a: 'Yes. CampusSwap supports listings, community requests, networking, and real-time chat in one app.'
   },
   {
     q: 'How is safety handled?',
@@ -49,7 +49,7 @@ export default function Landing() {
               <StaggerItem>
                 <h1 className="text-hero-lg max-w-xl">
                   SATI Student Marketplace,
-                  <span className="bg-gradient-to-r from-teal-700 via-blue-700 to-amber-600 bg-clip-text text-transparent"> Networking, Notes</span>
+                  <span className="bg-gradient-to-r from-teal-700 via-blue-700 to-amber-600 bg-clip-text text-transparent"> Networking, Community</span>
                   {' '}and Real-Time Chat.
                 </h1>
               </StaggerItem>
@@ -77,7 +77,7 @@ export default function Landing() {
                 </div>
                 <div className="space-y-4">
                   {[
-                    ['Macroeconomics Notes', 'PDF - Semester 4', 'INR 120'],
+                    ['Engineering Textbook', 'Good - Semester 4', 'INR 120'],
                     ['Scientific Calculator', 'Excellent - Hostel B', 'INR 700'],
                     ['Need Charger Tonight', 'Request - Urgent', 'Bounty INR 250']
                   ].map((card, idx) => (
@@ -112,7 +112,7 @@ export default function Landing() {
             <Stagger className="grid md:grid-cols-2 xl:grid-cols-4 gap-5">
               {[
                 ['Marketplace', 'Sell, swap, and discover trusted student deals with premium search.'],
-                ['Notes Exchange', 'Upload and discover academic notes with branch and semester filters.'],
+                ['Community Requests', 'Ask verified students for borrowing, resources, or campus help.'],
                 ['Real-Time Chat', 'Fast conversations, typing states, unread badges, and presence signals.'],
                 ['Moderation Layer', 'Reports queue, admin actions, and safer campus interactions by design.']
               ].map((feature) => (
@@ -129,7 +129,7 @@ export default function Landing() {
           <div className="section-container grid lg:grid-cols-3 gap-6">
             {[
               ['01', 'Create your profile', 'Join with your campus identity and unlock trusted interactions.'],
-              ['02', 'Discover or post', 'List items, share notes, post requests, and browse instantly.'],
+              ['02', 'Discover or post', 'List items, post community requests, and browse instantly.'],
               ['03', 'Connect and close', 'Message peers in real time and complete safer exchanges.']
             ].map((step, idx) => (
               <Reveal key={step[0]} delay={idx * 0.08} className="premium-card p-6">
@@ -147,7 +147,7 @@ export default function Landing() {
               <h2 className="text-section-title text-4xl mb-4">About CampusSwap</h2>
               <p className="text-body-sm text-base">CampusSwap is designed as a student-first ecosystem, not just a listing board. It combines commerce, academic sharing, peer networking, and trusted moderation in one place.</p>
               <div className="grid sm:grid-cols-2 gap-3 mt-6">
-                {['Marketplace listings', 'Notes and resources', 'Direct student chat', 'Requests and bounties', 'Connections and profiles', 'Admin moderation flow'].map((feature) => (
+                {['Marketplace listings', 'Community requests', 'Direct student chat', 'Saved favorites', 'Connections and profiles', 'Admin moderation flow'].map((feature) => (
                   <motion.div key={feature} whileHover={{ y: -2 }} className="premium-surface px-4 py-3 text-sm font-semibold">{feature}</motion.div>
                 ))}
               </div>
@@ -173,7 +173,7 @@ export default function Landing() {
           <div className="section-container">
             <div className="premium-card border-0 bg-slate-950 p-8 text-center text-white md:p-10">
               <h2 className="text-3xl md:text-5xl font-extrabold tracking-tight">Ready to launch CampusSwap on your campus?</h2>
-              <p className="mt-4 text-white/85 max-w-2xl mx-auto">From listings and notes to networking and moderation, this is a complete student platform foundation.</p>
+              <p className="mt-4 text-white/85 max-w-2xl mx-auto">From listings and requests to networking and moderation, this is a complete student platform foundation.</p>
               <div className="mt-8">
                 <Link to="/signup" className="inline-flex rounded-lg bg-amber-400 px-7 py-3 font-black text-slate-950 hover:bg-amber-300">Create Account</Link>
               </div>
@@ -196,7 +196,7 @@ export default function Landing() {
             <div>
               <p className="font-semibold mb-2">Platform</p>
               <p className="text-sm text-slate-300">Marketplace</p>
-              <p className="text-sm text-slate-300">Notes</p>
+              <p className="text-sm text-slate-300">Community</p>
               <p className="text-sm text-slate-300">Chat</p>
             </div>
             <div>
