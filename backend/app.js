@@ -16,6 +16,7 @@ import messageRoutes from './routes/messageRoutes.js';
 import noteRoutes from './routes/noteRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import noticeRoutes from './routes/noticeRoutes.js';
+import campusLocationRoutes from './routes/campusLocationRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import requestRoutes from './routes/requestRoutes.js';
 
@@ -81,6 +82,7 @@ export const createApp = ({ databaseMiddleware = requireDatabase } = {}) => {
   app.use('/api/connections', connectionRoutes);
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/notices', noticeRoutes);
+  app.use('/api/campus-locations', campusLocationRoutes);
   app.use('/api/reports', reportRoutes);
   app.use('/api/requests', requestRoutes);
   app.use('/api/admin', adminRoutes);
