@@ -28,6 +28,8 @@ const Network = lazy(() => import('./pages/Network'));
 const Notes = lazy(() => import('./pages/Notes'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const NoticeBoard = lazy(() => import('./pages/NoticeBoard'));
+const CampusMap = lazy(() => import('./pages/CampusMap'));
+const AdminCampusLocations = lazy(() => import('./pages/AdminCampusLocations'));
 const NoticeDetails = lazy(() => import('./pages/NoticeDetails'));
 const NotFound = lazy(() => import('./pages/NotFound'));
 const Profile = lazy(() => import('./pages/Profile'));
@@ -79,6 +81,7 @@ function AppContent() {
           <Route path="/chat" element={<ProtectedRoute><Chat /></ProtectedRoute>} />
           <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
           <Route path="/notices" element={<ProtectedRoute><NoticeBoard /></ProtectedRoute>} />
+          <Route path="/campus-map" element={<ProtectedRoute><CampusMap /></ProtectedRoute>} />
           <Route path="/notices/:id" element={<ProtectedRoute><NoticeDetails /></ProtectedRoute>} />
           <Route path="/about" element={<ProtectedRoute><About /></ProtectedRoute>} />
           <Route path="/feedback" element={<ProtectedRoute><Feedback /></ProtectedRoute>} />
@@ -88,6 +91,7 @@ function AppContent() {
           <Route path="/admin/users" element={<AdminRoute iam><AdminUsers /></AdminRoute>} />
           <Route path="/admin/academic-resources" element={<AdminRoute><AdminAcademicResources /></AdminRoute>} />
           <Route path="/admin/notices" element={<AdminRoute><AdminNotices /></AdminRoute>} />
+          <Route path="/admin/campus-locations" element={<AdminRoute><AdminCampusLocations /></AdminRoute>} />
           <Route path="/error" element={<Error />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

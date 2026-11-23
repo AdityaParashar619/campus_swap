@@ -14,14 +14,15 @@ test('student navigation includes Notes under Student Community without adding D
   assert.equal(getBrandDestination(null), '/');
 });
 
-test('College Services enables My Department and Notice Board while keeping future modules unavailable', () => {
+test('College Services enables My Department, Notice Board and Campus Map', () => {
   const section = getNavigationSections('student').find((item) => item.id === 'college-services');
   assert.equal(section.status, undefined);
   assert.deepEqual(section.items, COLLEGE_SERVICE_ITEMS);
   assert.deepEqual(section.items.map((item) => item.label), ['My Department', 'Notice Board', 'Campus Map', 'Campus Issues']);
   assert.deepEqual(section.items[0], { href: '/my-department', label: 'My Department' });
   assert.deepEqual(section.items[1], { href: '/notices', label: 'Notice Board' });
-  assert.equal(section.items.slice(2).every((item) => item.disabled && !item.href), true);
+  assert.deepEqual(section.items[2], { href: '/campus-map', label: 'Campus Map' });
+  assert.equal(section.items[3].disabled, true);
 });
 
 test('each supported administrator role receives the role-protected admin destination', () => {
@@ -43,9 +44,11 @@ test('Notes route restores the existing workflow behind the protected route', ()
 });
 
 test('navigation results cannot mutate the shared primary navigation definition', () => {
+  const originalLength = BASE_NAVIGATION.length;
   const links = getNavigationLinks('student');
   links.pop();
-  assert.equal(BASE_NAVIGATION.length, 11);
+  assert.equal(BASE_NAVIGATION.length, originalLength);
+  assert.equal(getNavigationLinks('student').length, links.length + 1);
 });
 
 test('account identity normalizes display names and produces bounded initials', () => {

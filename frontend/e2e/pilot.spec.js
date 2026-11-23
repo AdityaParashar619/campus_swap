@@ -2,6 +2,7 @@ import { expect, test } from '@playwright/test';
 
 const password = 'Pilot-Test-Password!27';
 const adminEmail = 'e2e-admin@satiengg.in';
+const backendUrl = process.env.E2E_BACKEND_URL || 'http://127.0.0.1:5100';
 const students = [
   { name: 'Pilot Student Alpha', email: 'alpha27cs001@satiengg.in', enrollment: '0108cs271001' },
   { name: 'Pilot Student Beta', email: 'beta27cs002@satiengg.in', enrollment: '0108cs271002' }
@@ -48,9 +49,8 @@ test('two isolated students register, retain academic identity, connect, and rem
     await expect(navigation.getByRole('heading', { name: 'College Services' })).toBeVisible();
     await expect(navigation.getByRole('link', { name: 'My Department' })).toBeVisible();
     await expect(navigation.getByRole('link', { name: 'Notice Board' })).toBeVisible();
-    for (const label of ['Campus Map', 'Campus Issues']) {
-      await expect(navigation.locator('[aria-disabled="true"]').filter({ hasText: label })).toBeVisible();
-    }
+    await expect(navigation.getByRole('link', { name: 'Campus Map' })).toHaveAttribute('href', '/campus-map');
+    await expect(navigation.locator('[aria-disabled="true"]').filter({ hasText: 'Campus Issues' })).toBeVisible();
     await expect(navigation.getByRole('link', { name: 'Notes' })).toBeVisible();
     expect(await pageA.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
     await navigation.getByRole('link', { name: 'Marketplace' }).click();
@@ -121,7 +121,7 @@ test('administrator publishes and retires a development fixture while student is
   await page.getByRole('navigation', { name: 'Primary navigation' }).getByRole('link', { name: 'Admin' }).click();
   await page.getByRole('link', { name: 'Academic resources' }).click();
   await expect(page.getByRole('heading', { name: 'Academic Resources' })).toBeVisible();
-  const adminLogin = await request.post('http://127.0.0.1:5100/api/auth/login', { data: { email: adminEmail, password } });
+  const adminLogin = await request.post(`${backendUrl}/api/auth/login`, { data: { email: adminEmail, password } });
   const adminToken = (await adminLogin.json()).token;
   await page.goto('/admin/notices');
   await expect(page.getByRole('heading', { name: 'Notice Management' })).toBeVisible();
@@ -209,11 +209,11 @@ test('administrator publishes and retires a development fixture while student is
   await expect(syllabusSection.getByText('7', { exact: true })).toBeVisible();
   await expect(syllabusSection.getByText('Not yet available', { exact: true })).toHaveCount(0);
 
-  const studentLogin = await request.post('http://127.0.0.1:5100/api/auth/login', { data: { email: students[0].email, password } });
+  const studentLogin = await request.post(`${backendUrl}/api/auth/login`, { data: { email: students[0].email, password } });
   const studentToken = (await studentLogin.json()).token;
-  const forbidden = await request.post('http://127.0.0.1:5100/api/admin/academic-resources', { headers: { Authorization: `Bearer ${studentToken}` }, data: { title: 'Forbidden' } });
+  const forbidden = await request.post(`${backendUrl}/api/admin/academic-resources`, { headers: { Authorization: `Bearer ${studentToken}` }, data: { title: 'Forbidden' } });
   expect(forbidden.status()).toBe(403);
-  const forbiddenNotice = await request.post('http://127.0.0.1:5100/api/admin/notices', { headers: { Authorization: `Bearer ${studentToken}` }, data: { title: 'Forbidden', content: 'Forbidden' } });
+  const forbiddenNotice = await request.post(`${backendUrl}/api/admin/notices`, { headers: { Authorization: `Bearer ${studentToken}` }, data: { title: 'Forbidden', content: 'Forbidden' } });
   expect(forbiddenNotice.status()).toBe(403);
 
   await page.getByRole('button', { name: /Account menu for/i }).click();
@@ -236,8 +236,12 @@ test('administrator publishes and retires a development fixture while student is
   await page.getByRole('button', { name: 'Login' }).click();
   await expect(page).toHaveURL(/dashboard/);
   await page.goto('/my-department');
+  await expect(page.getByRole('heading', { name: 'My Department' })).toBeVisible();
+  await expect(page.getByText('Loading academic resources', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Synthetic E2E CSE Semester 7 Reference')).toHaveCount(0);
   await page.goto('/notices');
+  await expect(page.getByRole('heading', { name: 'Campus Notice Board' })).toBeVisible();
+  await expect(page.getByText('Loading notices', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Synthetic CSE Semester 7 Notice')).toHaveCount(0);
   await page.getByRole('button', { name: /Account menu for/i }).click();
   await page.getByRole('button', { name: 'Log out' }).click();
@@ -256,8 +260,285 @@ test('administrator publishes and retires a development fixture while student is
   await expect(page).toHaveURL(/dashboard/);
   await page.goto('/notices');
   await expect(page.getByText('Synthetic CSE Semester 7 Notice')).toBeVisible();
-  const noticeArchived = await request.post(`http://127.0.0.1:5100/api/admin/notices/${noticeId}/archive`, { headers: { Authorization: `Bearer ${adminToken}` }, data: {} });
+  const noticeArchived = await request.post(`${backendUrl}/api/admin/notices/${noticeId}/archive`, { headers: { Authorization: `Bearer ${adminToken}` }, data: {} });
   expect(noticeArchived.status()).toBe(200);
+
+  await test.step('student campus map uses published locations and stays usable at each breakpoint', async () => {
+    const adminLocations = `${backendUrl}/api/admin/campus-locations`;
+    const headers = { Authorization: `Bearer ${adminToken}` };
+    async function fixture(name, category, status, latitude) {
+      const coordinates = { latitude, longitude: 78 };
+      const response = await request.post(adminLocations, {
+        headers, data: { name, category, ...coordinates, description: 'Fictional location for browser testing.' }
+      });
+      expect(response.status()).toBe(201);
+      const id = (await response.json()).data._id;
+      if (status !== 'draft') {
+        const verified = await request.post(`${adminLocations}/${id}/verify-coordinates`, {
+          headers, data: { ...coordinates, coordinateSource: 'Synthetic browser test' }
+        });
+        expect(verified.ok()).toBeTruthy();
+        expect((await request.post(`${adminLocations}/${id}/publish`, { headers })).ok()).toBeTruthy();
+      }
+      if (status === 'archived') expect((await request.post(`${adminLocations}/${id}/archive`, { headers })).ok()).toBeTruthy();
+      return id;
+    }
+    await page.route('https://tile.openstreetmap.org/**', (route) => route.fulfill({
+      contentType: 'image/png',
+      body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jf1sAAAAASUVORK5CYII=', 'base64')
+    }));
+    await page.goto('/campus-map');
+    await expect(page.getByText(/No campus locations are available yet/)).toBeVisible();
+    await fixture('Fictional Atlas Library', 'library', 'published', 23.5);
+    await fixture('Fictional Atlas Courtyard', 'facility', 'published', 23.51);
+    const draft = await fixture('Fictional Hidden Draft', 'library', 'draft', 23.52);
+    const archived = await fixture('Fictional Hidden Archive', 'library', 'archived', 23.53);
+    for (const id of [draft, archived]) {
+      const response = await request.get(`${backendUrl}/api/campus-locations/${id}`, {
+        headers: { Authorization: `Bearer ${studentToken}` }
+      });
+      expect(response.status()).toBe(404);
+    }
+
+    await page.reload();
+    const map = page.getByRole('region', { name: 'Interactive campus map' });
+    const results = page.getByRole('list', { name: 'Location results' });
+    const library = map.locator('img[alt="Fictional Atlas Library (library)"]');
+    await expect(library).toBeVisible();
+    await expect(results.getByRole('listitem')).toHaveCount(2);
+    await expect(map.getByRole('link', { name: 'OpenStreetMap', exact: true })).toBeVisible();
+    await library.click();
+    const details = page.getByRole('region', { name: 'Location details' });
+    await expect(details.getByRole('heading', { name: 'Fictional Atlas Library' })).toBeVisible();
+    const directions = details.getByRole('link', { name: 'Get Directions' });
+    await expect(directions).toHaveAttribute('href', 'https://www.google.com/maps/dir/?api=1&destination=23.5%2C78');
+    await expect(directions).toHaveAttribute('rel', 'noopener noreferrer');
+    await expect(details.getByText('Opening hours')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: /Publish|Archive|Edit location/ })).toHaveCount(0);
+    for (const width of [320, 390, 768, 1280, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(page.getByLabel('Search locations')).toBeVisible();
+      await expect(page.getByLabel('Category', { exact: true })).toBeVisible();
+      await expect(map.getByRole('button', { name: 'Zoom in' })).toBeVisible();
+      await expect(directions).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+    }
+    await page.getByLabel('Category', { exact: true }).selectOption('library');
+    await expect(results.getByRole('listitem')).toHaveCount(1);
+    await expect(results.getByText('Fictional Atlas Courtyard')).toHaveCount(0);
+    await page.getByLabel('Category', { exact: true }).selectOption('');
+    await page.getByLabel('Search locations').fill('Courtyard');
+    await expect(results.getByRole('listitem')).toHaveCount(1);
+    await results.getByRole('button', { name: /Fictional Atlas Courtyard/ }).click();
+    await expect(details.getByRole('heading', { name: 'Fictional Atlas Courtyard' })).toBeVisible();
+    await page.route('**/api/campus-locations?*search=unavailable*', (route) => route.fulfill({
+      status: 503, json: { message: 'Synthetic temporary outage' }
+    }), { times: 1 });
+    await page.getByLabel('Search locations').fill('unavailable');
+    await expect(page.getByRole('alert')).toContainText('Synthetic temporary outage');
+    await page.getByRole('button', { name: 'Retry' }).click();
+    await expect(page.getByText('No locations match your search or category.')).toBeVisible();
+    await page.goto('/notices');
+    await expect(page.getByRole('heading', { name: 'Campus Notice Board' })).toBeVisible();
+  });
+});
+
+test('administrator manages campus coordinates through the student-visible lifecycle', async ({ page, browser, request }) => {
+  test.setTimeout(120_000);
+  page.setDefaultTimeout(12_000);
+  page.on('dialog', (dialog) => dialog.accept());
+  const mockTiles = (view) => view.route('https://tile.openstreetmap.org/**', (route) => route.fulfill({
+    contentType: 'image/png',
+    body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jf1sAAAAASUVORK5CYII=', 'base64')
+  }));
+  const login = async (view, email) => {
+    await view.goto('/login');
+    await view.locator('input[type="email"]').fill(email);
+    await view.locator('input[type="password"]').fill(password);
+    await view.getByRole('button', { name: 'Login' }).click();
+    await expect(view.getByRole('button', { name: /Account menu for/i })).toBeVisible();
+  };
+  await mockTiles(page);
+  await login(page, adminEmail);
+  await page.goto('/admin');
+  await page.getByRole('link', { name: 'Campus Locations' }).click();
+  await expect(page.getByRole('heading', { name: 'Campus Locations', exact: true })).toBeVisible();
+
+  const studentContext = await browser.newContext();
+  try {
+    const student = await studentContext.newPage();
+    student.setDefaultTimeout(12_000);
+    await mockTiles(student);
+    await login(student, students[0].email);
+    await student.goto('/admin/campus-locations');
+    await expect(student).toHaveURL(/dashboard/);
+
+    const suffix = Date.now().toString(36);
+    const name = `Fictional Meridian Workshop ${suffix}`;
+    const code = `E2E-${suffix.toUpperCase()}`;
+    const alias = `Fictional Precision Lab ${suffix}`;
+    const studentVisibility = async (visible, coordinates) => {
+      await student.goto('/campus-map');
+      await expect(student.getByRole('heading', { name: 'Campus Map' })).toBeVisible();
+      await student.getByLabel('Search locations').fill(code);
+      if (!visible) {
+        await expect(student.getByText('No locations match your search or category.')).toBeVisible();
+        return;
+      }
+      await student.getByRole('list', { name: 'Location results' }).getByRole('button', { name: new RegExp(name) }).click();
+      const details = student.getByRole('region', { name: 'Location details' });
+      await expect(details.getByRole('heading', { name })).toBeVisible();
+      await expect(details.getByRole('link', { name: 'Get Directions' })).toHaveAttribute('href',
+        `https://www.google.com/maps/dir/?${new URLSearchParams({ api: '1', destination: coordinates.join(',') })}`);
+    };
+
+    await page.getByRole('button', { name: 'Add Location' }).click();
+    const editor = page.getByRole('region', { name: 'Location editor' });
+    await editor.getByRole('button', { name: 'Save Draft' }).click();
+    await expect(editor.getByRole('alert')).toContainText('Enter a location name');
+    await editor.getByLabel('Location name').fill(name);
+    await editor.getByLabel('Category', { exact: true }).selectOption('facility');
+    await editor.getByLabel('Building code').fill(code);
+    await editor.getByLabel('Aliases (one per line)').fill(alias);
+    await editor.getByText('Advanced Details', { exact: true }).click();
+    await editor.getByLabel('Opening hours').fill('Synthetic hours');
+    await editor.getByRole('button', { name: 'Select on Map' }).click();
+    const map = editor.getByRole('region', { name: 'Coordinate picker' });
+    const canvas = map.locator('.leaflet-container');
+    const marker = map.getByAltText('Selected coordinates');
+    const latitude = editor.getByLabel('Latitude', { exact: true });
+    const longitude = editor.getByLabel('Longitude', { exact: true });
+
+    for (const width of [320, 390, 768, 1280, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(latitude).toBeVisible();
+      await expect(canvas).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+    }
+    await page.setViewportSize({ width: 390, height: 900 });
+    await canvas.click({ position: { x: 100, y: 140 } });
+    await expect(marker).toBeVisible();
+    const clicked = await latitude.inputValue();
+    expect(Number.isFinite(Number(clicked)) && clicked.length > 0).toBeTruthy();
+    await marker.scrollIntoViewIfNeeded();
+    const box = await marker.boundingBox();
+    await page.mouse.move(box.x + 12, box.y + 12);
+    await page.mouse.down();
+    await page.mouse.move(box.x + 35, box.y + 46, { steps: 5 });
+    await page.mouse.up();
+    await expect(latitude).not.toHaveValue(clicked);
+    await latitude.fill('91');
+    await expect(marker).toHaveCount(0);
+    await editor.getByRole('button', { name: 'Save Draft' }).click();
+    await expect(editor.getByRole('alert')).toContainText('numeric latitude');
+    const initial = [23.50123456789, 78.00123456789];
+    await latitude.fill(String(initial[0]));
+    await longitude.fill(String(initial[1]));
+    await expect(marker).toBeAttached();
+    const saveDraft = editor.getByRole('button', { name: 'Save Draft' });
+    await saveDraft.evaluate((button) => { button.click(); button.click(); });
+    await expect(editor.getByRole('status')).toHaveText('Draft saved.');
+    await expect(editor.getByRole('button', { name: 'Publish', exact: true })).toBeDisabled();
+    await studentVisibility(false);
+
+    async function verify() {
+      await editor.getByRole('button', { name: 'Verify Coordinates' }).click();
+      await expect(editor.getByRole('button', { name: 'Confirm Verification' })).toBeDisabled();
+      await editor.getByLabel('Coordinate source').fill('Fictional browser test coordinates');
+      await editor.getByRole('button', { name: 'Confirm Verification' }).click();
+      await expect(editor.getByRole('status')).toHaveText('Coordinates verified.');
+    }
+
+    await verify();
+    await studentVisibility(false);
+    await editor.getByRole('button', { name: 'Publish', exact: true }).click();
+    await expect(editor.getByRole('status')).toHaveText('Location published.');
+    await studentVisibility(true, initial);
+
+    await editor.getByRole('button', { name: 'Close editor' }).click();
+    await page.getByLabel('Search locations').fill(alias);
+    await page.getByLabel('Category filter').selectOption('facility');
+    await page.getByLabel('Status filter').selectOption('draft');
+    await expect(page.getByText('No campus locations match these filters.')).toBeVisible();
+    await page.getByLabel('Status filter').selectOption('published');
+    const rows = page.getByRole('list', { name: 'Managed campus locations' });
+    await expect(rows.getByRole('listitem')).toHaveCount(1);
+    await rows.getByRole('button', { name: 'Edit Location' }).click();
+    await expect(latitude).toHaveValue(String(initial[0]));
+    await editor.getByRole('button', { name: 'Select on Map' }).click();
+    await expect(marker).toBeVisible();
+    const updated = [23.51234567891, initial[1]];
+    await latitude.fill(String(updated[0]));
+    await expect(editor.getByRole('note')).toContainText('disappear from the student map');
+    await editor.getByRole('button', { name: 'Save Changes' }).click();
+    await expect(editor.getByRole('status')).toContainText('moved to draft');
+    await studentVisibility(false);
+    await verify();
+    await editor.getByRole('button', { name: 'Publish', exact: true }).click();
+    await expect(editor.getByRole('status')).toHaveText('Location published.');
+    await studentVisibility(true, updated);
+    await editor.getByRole('button', { name: 'Archive', exact: true }).click();
+    await expect(editor.getByRole('status')).toHaveText('Location archived.');
+    await studentVisibility(false);
+    await editor.getByRole('button', { name: 'Republish', exact: true }).click();
+    await expect(editor.getByRole('status')).toHaveText('Location published.');
+    await studentVisibility(true, updated);
+
+    const response = await request.post(`${backendUrl}/api/auth/login`, { data: { email: adminEmail, password } });
+    expect(response.ok()).toBeTruthy();
+    const headers = { Authorization: `Bearer ${(await response.json()).token}` };
+    const endpoint = `${backendUrl}/api/admin/campus-locations`;
+    const catalogue = await request.get(endpoint, { headers, params: { search: code } });
+    expect(catalogue.ok()).toBeTruthy();
+    const savedLocations = (await catalogue.json()).data;
+    expect(savedLocations).toHaveLength(1);
+    const [saved] = savedLocations;
+    expect(saved.openingHoursText).toBe('Synthetic hours');
+    const externalEdit = await request.patch(`${endpoint}/${saved._id}`, {
+      headers: { ...headers, 'If-Match': `"${saved.__v}"` }, data: { description: 'Concurrent administrator edit' }
+    });
+    expect(externalEdit.ok()).toBeTruthy();
+    await editor.getByLabel('Description', { exact: true }).fill('Unsaved local edit');
+    await editor.getByRole('button', { name: 'Save Changes' }).click();
+    await expect(editor.getByRole('alert')).toContainText('Location changed');
+    await expect(editor.getByLabel('Description', { exact: true })).toHaveValue('Unsaved local edit');
+    await expect(editor.getByRole('button', { name: 'Save Changes' })).toBeDisabled();
+    await editor.getByRole('button', { name: 'Reload saved location' }).click();
+    await expect(editor.getByLabel('Description', { exact: true })).toHaveValue('Concurrent administrator edit');
+  } finally {
+    await studentContext.close();
+  }
+});
+
+test('admin campus location list retries an error and requests bounded pages', async ({ page }) => {
+  const requests = [];
+  await page.route('**/api/admin/campus-locations?*', (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    const pageNumber = Number(params.get('page'));
+    requests.push({ page: pageNumber, limit: Number(params.get('limit')) });
+    if (requests.length === 1) return route.fulfill({ status: 503, json: { message: 'Fictional catalogue outage' } });
+    return route.fulfill({ json: {
+      success: true,
+      data: [{ _id: `fictional-${pageNumber}`, name: `Fictional page ${pageNumber} workshop`, status: 'draft', category: 'facility' }],
+      pagination: { page: pageNumber, limit: 12, total: 13, totalPages: 2 }
+    } });
+  });
+  await page.goto('/login');
+  await page.locator('input[type="email"]').fill(adminEmail);
+  await page.locator('input[type="password"]').fill(password);
+  await page.getByRole('button', { name: 'Login' }).click();
+  await expect(page.getByRole('button', { name: /Account menu for/i })).toBeVisible();
+  await page.goto('/admin/campus-locations');
+  await expect(page.getByRole('alert')).toContainText('Fictional catalogue outage');
+  await page.getByRole('button', { name: 'Retry', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Fictional page 1 workshop' })).toBeVisible();
+  const pagination = page.getByRole('navigation', { name: 'Campus location pagination' });
+  await pagination.getByRole('button', { name: 'Next' }).click();
+  await expect(page.getByRole('heading', { name: 'Fictional page 2 workshop' })).toBeVisible();
+  await expect(pagination.getByRole('button', { name: 'Next' })).toBeDisabled();
+  await pagination.getByRole('button', { name: 'Previous' }).click();
+  await expect(page.getByRole('heading', { name: 'Fictional page 1 workshop' })).toBeVisible();
+  expect(requests).toEqual([1, 1, 2, 1].map((number) => ({ page: number, limit: 12 })));
 });
 
 for (const width of [320, 390, 768, 1280, 1920]) {

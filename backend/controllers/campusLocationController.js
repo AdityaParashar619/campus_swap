@@ -57,6 +57,13 @@ const mutate = (change) => asyncHandler(async (req, res) => {
   assertId(req.params.id);
   const location = await CampusLocation.findById(req.params.id);
   if (!location) throw new NotFound('Campus location not found');
+  const expectedVersion = req.get('If-Match');
+  if (expectedVersion !== undefined) {
+    if (!/^"\d+"$/.test(expectedVersion)) throw new BadRequest('If-Match must contain a quoted location version');
+    if (expectedVersion !== `"${location.__v}"`) {
+      throw new Conflict('Location changed. Reload it before retrying.');
+    }
+  }
   change(location, req.body, req.user.userId);
   location.updatedBy = req.user.userId;
   try {

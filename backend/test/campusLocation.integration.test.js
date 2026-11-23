@@ -5,7 +5,7 @@ import mongoose from 'mongoose';
 
 const uri = process.env.CAMPUS_LOCATION_TEST_MONGO_URI;
 test('campus location HTTP lifecycle, visibility, filtering and concurrent edits', { skip: !uri }, async () => {
-  if (!/^mongodb:\/\/(?:127\.0\.0\.1|localhost):27018\/campusswap_locations_test$/.test(uri)) {
+  if (!/^mongodb:\/\/(?:127\.0\.0\.1|localhost):2701[89]\/campusswap_locations_test$/.test(uri)) {
     throw new Error('Use the local disposable E2E MongoDB port and campusswap_locations_test database');
   }
   process.env.NODE_ENV = 'test';
@@ -29,13 +29,14 @@ test('campus location HTTP lifecycle, visibility, filtering and concurrent edits
     await new Promise((resolve, reject) => {
       server = createApp().listen(0, '127.0.0.1', resolve).once('error', reject);
     });
-    async function call(path, user, method = 'GET', data) {
+    async function call(path, user, method = 'GET', data, version) {
       const headers = { 'content-type': 'application/json' };
       if (user) headers.authorization = `Bearer ${signAuthToken({ userId: String(user._id), tokenVersion: 0 })}`;
+      if (version !== undefined) headers['If-Match'] = `"${version}"`;
       const res = await fetch(`http://127.0.0.1:${server.address().port}${path}`, {
         method, headers, body: data === undefined ? undefined : JSON.stringify(data)
       });
-      return { status: res.status, ...(await res.json()) };
+      return { ...(await res.json()), status: res.status };
     }
     const writes = '/api/admin/campus-locations';
     const reads = '/api/campus-locations';
@@ -75,6 +76,9 @@ test('campus location HTTP lifecycle, visibility, filtering and concurrent edits
     for (const key of ['createdBy', 'updatedBy', 'coordinateVerifiedBy', 'coordinateSource', '__v']) assert.equal(key in visible.data, false);
     const edited = await call(edit, admin, 'PATCH', { description: 'Library fixture' });
     assert.equal(edited.data.coordinateVerifiedAt, verified.data.coordinateVerifiedAt);
+    assert.equal((await call(edit, admin, 'PATCH', { description: 'Stale edit' }, draft.data.__v)).status, 409);
+    assert.equal((await call(`${edit}/archive`, admin, 'POST', {}, draft.data.__v)).status, 409);
+    assert.equal((await call(edit, admin)).data.description, 'Library fixture');
     for (const search of ['study hall', fixture.buildingCode, fixture.name]) {
       const list = await call(`${reads}?category=library&limit=1&search=${encodeURIComponent(search)}`, student);
       assert.equal(list.pagination.total, 1);

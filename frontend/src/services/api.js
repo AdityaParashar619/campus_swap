@@ -98,6 +98,28 @@ export const noticeAPI = {
   getById: (id, options = {}) => API.get(`/notices/${id}`, { signal: options.signal })
 };
 
+export const campusLocationAPI = {
+  getAll: (params, { signal } = {}) => API.get('/campus-locations', { params, signal }),
+  getById: (id, { signal } = {}) => API.get(`/campus-locations/${encodeURIComponent(id)}`, { signal })
+};
+
+const adminLocationPath = '/admin/campus-locations';
+const locationPath = (id) => `${adminLocationPath}/${encodeURIComponent(id)}`;
+const locationVersion = (version) => {
+  if (!Number.isSafeInteger(version) || version < 0) throw new Error('Reload the saved location before making changes.');
+  return { headers: { 'If-Match': `"${version}"` } };
+};
+
+export const adminCampusLocationAPI = {
+  list: (params, signal) => API.get(adminLocationPath, { params, signal }),
+  get: (id, signal) => API.get(locationPath(id), { signal }),
+  create: (data) => API.post(adminLocationPath, data),
+  update: (id, data, version) => API.patch(locationPath(id), data, locationVersion(version)),
+  verify: (id, data, version) => API.post(`${locationPath(id)}/verify-coordinates`, data, locationVersion(version)),
+  publish: (id, version) => API.post(`${locationPath(id)}/publish`, {}, locationVersion(version)),
+  archive: (id, version) => API.post(`${locationPath(id)}/archive`, {}, locationVersion(version))
+};
+
 export const listingAPI = {
   getAll: (params, options = {}) => API.get('/listings', { params, signal: options.signal }),
   getById: (id, options = {}) => API.get(`/listings/${id}`, { signal: options.signal }),
