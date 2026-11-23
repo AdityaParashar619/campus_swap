@@ -17,18 +17,15 @@ import noteRoutes from './routes/noteRoutes.js';
 import notificationRoutes from './routes/notificationRoutes.js';
 import noticeRoutes from './routes/noticeRoutes.js';
 import campusLocationRoutes from './routes/campusLocationRoutes.js';
+import campusIssueRoutes from './routes/campusIssueRoutes.js';
 import reportRoutes from './routes/reportRoutes.js';
 import requestRoutes from './routes/requestRoutes.js';
-
-const allowedOrigins = env.frontendUrl
-  .split(',')
-  .map((origin) => origin.trim())
-  .filter(Boolean);
+import { Forbidden } from './utils/AppError.js';
 
 export const corsOptions = {
   origin(origin, callback) {
-    if (!origin || allowedOrigins.includes(origin)) return callback(null, true);
-    return callback(new Error('Origin is not allowed by CORS'));
+    if (!origin || env.frontendOrigins.includes(origin)) return callback(null, true);
+    return callback(new Forbidden('Origin is not allowed by CORS'));
   },
   credentials: true
 };
@@ -83,6 +80,7 @@ export const createApp = ({ databaseMiddleware = requireDatabase } = {}) => {
   app.use('/api/notifications', notificationRoutes);
   app.use('/api/notices', noticeRoutes);
   app.use('/api/campus-locations', campusLocationRoutes);
+  app.use('/api/campus-issues', campusIssueRoutes);
   app.use('/api/reports', reportRoutes);
   app.use('/api/requests', requestRoutes);
   app.use('/api/admin', adminRoutes);

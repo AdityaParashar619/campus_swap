@@ -29,6 +29,10 @@ const Notes = lazy(() => import('./pages/Notes'));
 const Notifications = lazy(() => import('./pages/Notifications'));
 const NoticeBoard = lazy(() => import('./pages/NoticeBoard'));
 const CampusMap = lazy(() => import('./pages/CampusMap'));
+const CampusIssues = lazy(() => import('./pages/CampusIssues'));
+const CreateCampusIssue = lazy(() => import('./pages/CreateCampusIssue'));
+const CampusIssueDetails = lazy(() => import('./pages/CampusIssueDetails'));
+const AdminCampusIssues = lazy(() => import('./pages/AdminCampusIssues'));
 const AdminCampusLocations = lazy(() => import('./pages/AdminCampusLocations'));
 const NoticeDetails = lazy(() => import('./pages/NoticeDetails'));
 const NotFound = lazy(() => import('./pages/NotFound'));
@@ -40,10 +44,11 @@ const VerifyEmail = lazy(() => import('./pages/VerifyEmail'));
 const VerifyAlumni = lazy(() => import('./pages/VerifyAlumni'));
 const AccountStatus = lazy(() => import('./pages/AccountStatus'));
 
-const ProtectedRoute = ({ children }) => {
+const ProtectedRoute = ({ children, studentOnly = false }) => {
   const { user, loading } = useAuth();
   if (loading) return <div className="flex items-center justify-center h-screen">Loading...</div>;
   if (!user) return <Navigate to="/login" replace />;
+  if (studentOnly && user.role !== 'student') return <Navigate to="/dashboard" replace />;
   return children;
 };
 
@@ -82,6 +87,9 @@ function AppContent() {
           <Route path="/notifications" element={<ProtectedRoute><Notifications /></ProtectedRoute>} />
           <Route path="/notices" element={<ProtectedRoute><NoticeBoard /></ProtectedRoute>} />
           <Route path="/campus-map" element={<ProtectedRoute><CampusMap /></ProtectedRoute>} />
+          <Route path="/campus-issues" element={<ProtectedRoute studentOnly><CampusIssues /></ProtectedRoute>} />
+          <Route path="/campus-issues/new" element={<ProtectedRoute studentOnly><CreateCampusIssue /></ProtectedRoute>} />
+          <Route path="/campus-issues/:id" element={<ProtectedRoute studentOnly><CampusIssueDetails /></ProtectedRoute>} />
           <Route path="/notices/:id" element={<ProtectedRoute><NoticeDetails /></ProtectedRoute>} />
           <Route path="/about" element={<ProtectedRoute><About /></ProtectedRoute>} />
           <Route path="/feedback" element={<ProtectedRoute><Feedback /></ProtectedRoute>} />
@@ -92,6 +100,7 @@ function AppContent() {
           <Route path="/admin/academic-resources" element={<AdminRoute><AdminAcademicResources /></AdminRoute>} />
           <Route path="/admin/notices" element={<AdminRoute><AdminNotices /></AdminRoute>} />
           <Route path="/admin/campus-locations" element={<AdminRoute><AdminCampusLocations /></AdminRoute>} />
+          <Route path="/admin/campus-issues" element={<AdminRoute><AdminCampusIssues /></AdminRoute>} />
           <Route path="/error" element={<Error />} />
           <Route path="*" element={<NotFound />} />
         </Routes>

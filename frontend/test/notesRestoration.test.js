@@ -19,5 +19,6 @@ test('restored Notes blocks unsafe file links and sandboxes document previews', 
 test('restored Notes provides accessible filters, errors, and dialog semantics', () => {
   assert.match(notes, /aria-label="Search notes"/);
   assert.match(notes, /role="alert"/);
-  assert.match(notes, /role="dialog" aria-modal="true"/);
+  assert.match(notes, /<dialog ref=\{previewDialog\} aria-labelledby="note-preview-title"/);
+  assert.match(notes, /\.showModal\(\)/);
 });

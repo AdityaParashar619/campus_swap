@@ -50,6 +50,7 @@ services:
       CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:?Set Cloudinary cloud name}
       CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:?Set backend-only Cloudinary API key}
       CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:?Set backend-only Cloudinary API secret}
+      CAMPUS_ISSUE_PRIVATE_EVIDENCE_ENABLED: "false"
       PRODUCT_IMAGE_MAX_COUNT: ${PRODUCT_IMAGE_MAX_COUNT:-5}
       PRODUCT_IMAGE_MAX_SIZE_MB: ${PRODUCT_IMAGE_MAX_SIZE_MB:-5}
       ADMIN_BOOTSTRAP_ENABLED: ${ADMIN_BOOTSTRAP_ENABLED:-false}
@@ -74,5 +75,5 @@ services:
     build:
       args:
         VITE_API_BASE_URL: /api
-    ports:
+    ports: !override
       - "127.0.0.1:${FRONTEND_PORT:-8080}:80"

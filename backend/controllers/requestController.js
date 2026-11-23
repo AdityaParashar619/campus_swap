@@ -12,6 +12,13 @@ const requireValidId = (id) => {
   if (!mongoose.isValidObjectId(id)) throw new BadRequest('Invalid request ID');
 };
 
+function visibleRequest(post, viewerId) {
+  const data = post.toObject();
+  if (viewerId && String(data.user?._id ?? data.user) === viewerId) return data;
+  const responses = viewerId ? data.responses.filter(({ user }) => String(user?._id ?? user) === viewerId) : [];
+  return { ...data, responses };
+}
+
 const normalizeCreation = (body = {}) => {
   const unsupported = Object.keys(body).filter((field) => !CREATE_FIELDS.has(field));
   if (unsupported.length) throw new BadRequest(`Unsupported request field: ${unsupported[0]}`);
@@ -49,7 +56,10 @@ export const getRequestPosts = asyncHandler(async (req, res) => {
       .limit(limit),
     RequestPost.countDocuments(filter)
   ]);
-  res.json({ success: true, data, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+  res.set('Cache-Control', 'private, no-store').json({
+    success: true, data: data.map((post) => visibleRequest(post, req.user?.userId)),
+    pagination: { page, limit, total, totalPages: Math.ceil(total / limit) }
+  });
 });
 
 export const respondToRequestPost = asyncHandler(async (req, res) => {
@@ -88,7 +98,10 @@ export const respondToRequestPost = asyncHandler(async (req, res) => {
     .populate('fulfilledBy', 'name profilePicture trustScore')
     .populate('responses.user', 'name profilePicture trustScore');
 
-  res.status(201).json({ success: true, message: 'Response sent', data: populatedPost });
+  if (!populatedPost) throw new NotFound('Request post not found');
+  res.set('Cache-Control', 'private, no-store').status(201).json({
+    success: true, message: 'Response sent', data: visibleRequest(populatedPost, req.user.userId)
+  });
 });
 
 export const updateRequestPostStatus = asyncHandler(async (req, res) => {

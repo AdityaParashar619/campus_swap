@@ -8,7 +8,7 @@ const ownerId = '507f1f77bcf86cd799439011';
 const requestId = '507f1f77bcf86cd799439012';
 
 const invoke = (handler, req) => new Promise((resolve, reject) => {
-  const res = { statusCode: 200, status(code) { this.statusCode = code; return this; }, json(payload) { resolve({ status: this.statusCode, payload }); } };
+  const res = { statusCode: 200, set() { return this; }, status(code) { this.statusCode = code; return this; }, json(payload) { resolve({ status: this.statusCode, payload }); } };
   handler(req, res, reject);
 });
 

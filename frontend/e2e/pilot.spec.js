@@ -50,12 +50,13 @@ test('two isolated students register, retain academic identity, connect, and rem
     await expect(navigation.getByRole('link', { name: 'My Department' })).toBeVisible();
     await expect(navigation.getByRole('link', { name: 'Notice Board' })).toBeVisible();
     await expect(navigation.getByRole('link', { name: 'Campus Map' })).toHaveAttribute('href', '/campus-map');
-    await expect(navigation.locator('[aria-disabled="true"]').filter({ hasText: 'Campus Issues' })).toBeVisible();
+    await expect(navigation.getByRole('link', { name: 'Campus Issues' })).toHaveAttribute('href', '/campus-issues');
     await expect(navigation.getByRole('link', { name: 'Notes' })).toBeVisible();
     expect(await pageA.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
     await navigation.getByRole('link', { name: 'Marketplace' }).click();
     await expect(navigation).toBeHidden();
     await expect(pageA).toHaveURL(/\/listings$/);
+    await expect(pageA.getByRole('heading', { name: 'Discover student listings' })).toBeVisible();
     if (width === 390) {
       await pageA.getByRole('button', { name: 'Switch to dark theme' }).click();
       await expect(pageA.locator('html')).toHaveClass(/dark/);
@@ -539,6 +540,306 @@ test('admin campus location list retries an error and requests bounded pages', a
   await pagination.getByRole('button', { name: 'Previous' }).click();
   await expect(page.getByRole('heading', { name: 'Fictional page 1 workshop' })).toBeVisible();
   expect(requests).toEqual([1, 1, 2, 1].map((number) => ({ page: number, limit: 12 })));
+});
+
+test('students submit private campus issues and see admin review outcomes', async ({ page, browser, request }) => {
+  test.setTimeout(120_000);
+  const login = async (view, email) => {
+    await view.goto('/login');
+    await view.locator('input[type="email"]').fill(email);
+    await view.locator('input[type="password"]').fill(password);
+    await view.getByRole('button', { name: 'Login' }).click();
+    await expect(view).toHaveURL(/dashboard/);
+  };
+  await page.goto('/campus-issues/new');
+  await expect(page).toHaveURL(/\/login$/);
+  await login(page, students[0].email);
+  await page.setViewportSize({ width: 390, height: 900 });
+  await page.getByRole('button', { name: 'Open navigation menu' }).click();
+  await page.locator('#mobile-navigation').getByRole('link', { name: 'Campus Issues' }).click();
+  await expect(page.getByText(/No active or recent reports/)).toBeVisible();
+  await page.getByRole('link', { name: 'Submit New Issue' }).click();
+  const submit = page.getByRole('button', { name: 'Submit Report', exact: true });
+  await submit.click();
+  await expect(page.getByRole('alert')).toContainText('Enter a title.');
+
+  const title = 'Synthetic water fixture issue';
+  const description = 'A synthetic report. <script>Plain text</script> ' + 'a'.repeat(250);
+  await page.getByLabel('Title', { exact: true }).fill(title);
+  await page.getByLabel('Category', { exact: true }).selectOption('water');
+  await page.getByLabel('Description', { exact: true }).fill(description);
+  await page.getByLabel('Location description (optional)').fill('Near the synthetic fixture');
+  await page.route('**/api/campus-locations?*', (route) => route.fulfill({ json: {
+    success: true, data: [], pagination: { page: 1, totalPages: 0 }
+  } }), { times: 1 });
+  const picker = page.getByRole('button', { name: 'Choose a campus location (optional)' });
+  await picker.click();
+  await expect(page.getByText(/No campus locations are available yet/)).toBeVisible();
+  await page.getByRole('button', { name: 'Hide campus locations' }).click();
+  await picker.click();
+  await page.getByLabel('Search campus locations').fill('Atlas Library');
+  await page.getByRole('button', { name: 'Fictional Atlas Library' }).click();
+  await expect(page.getByText('Selected: Fictional Atlas Library')).toBeVisible();
+  for (const width of [320, 390, 768, 1280, 1920]) {
+    await page.setViewportSize({ width, height: 900 });
+    await expect(page.getByLabel('Title', { exact: true })).toBeVisible();
+    await expect(submit).toBeEnabled();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+  }
+
+  let submissions = 0;
+  await page.route('**/api/campus-issues', async (route) => {
+    submissions += 1;
+    if (submissions === 1) return route.fulfill({ status: 429, json: { message: 'Synthetic rate limit' } });
+    return route.continue();
+  });
+  await submit.click();
+  await expect(page.getByRole('alert')).toContainText('Too many submissions.');
+  await expect(page.getByLabel('Description', { exact: true })).toHaveValue(description);
+  await expect(page.getByText('Selected: Fictional Atlas Library')).toBeVisible();
+  await submit.evaluate((button) => { button.click(); button.click(); });
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  expect(submissions).toBe(2);
+  await expect(page.getByText('Report submitted.', { exact: true })).toBeVisible();
+  await expect(page.getByText('Submitted', { exact: true }).first()).toBeVisible();
+  await expect(page.getByText('Fictional Atlas Library', { exact: true })).toBeVisible();
+  await expect(page.getByText(description, { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /resolve|close issue|update status/i })).toHaveCount(0);
+  const issuePath = new URL(page.url()).pathname;
+  const issueId = issuePath.split('/').at(-1);
+
+  const admin = await request.post(`${backendUrl}/api/auth/login`, { data: { email: adminEmail, password } });
+  expect(admin.ok()).toBeTruthy();
+  const authorization = `Bearer ${(await admin.json()).token}`;
+  const endpoint = `${backendUrl}/api/admin/campus-issues/${issueId}`;
+  const get = await request.get(endpoint, { headers: { authorization } });
+  expect(get.ok()).toBeTruthy();
+  async function update(url, version, data) {
+    const response = await request.patch(`${url}/status`, { headers: { authorization, 'If-Match': `"${version}"` }, data });
+    expect(response.ok()).toBeTruthy();
+    return (await response.json()).data;
+  }
+  const reviewed = await update(endpoint, (await get.json()).data.version, {
+    status: 'under_review', adminResponse: 'We reviewed the synthetic campus report.'
+  });
+  await page.reload();
+  await expect(page.getByText('Under Review', { exact: true })).toBeVisible();
+  await expect(page.getByText(reviewed.adminResponse, { exact: true })).toBeVisible();
+  const resolved = await update(endpoint, reviewed.version, {
+    status: 'resolved', resolutionNote: 'The synthetic water fixture is operational again.'
+  });
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Resolution note' })).toBeVisible();
+  await expect(page.getByText(resolved.resolutionNote, { exact: true })).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 850 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+
+  const otherContext = await browser.newContext();
+  try {
+    const other = await otherContext.newPage();
+    await login(other, students[1].email);
+    await other.goto(issuePath);
+    await expect(other.getByRole('alert')).toHaveText('This report is unavailable.');
+    await expect(other.getByText(title)).toHaveCount(0);
+  } finally {
+    await otherContext.close();
+  }
+
+  const owner = await request.post(`${backendUrl}/api/auth/login`, { data: { email: students[0].email, password } });
+  expect(owner.ok()).toBeTruthy();
+  const second = await request.post(`${backendUrl}/api/campus-issues`, {
+    headers: { authorization: `Bearer ${(await owner.json()).token}` },
+    data: { title: 'Synthetic duplicate issue', category: 'water', description: 'Submitted with a written location only.', locationDescription: 'Ground floor' }
+  });
+  expect(second.status()).toBe(201);
+  const duplicate = (await second.json()).data;
+  await update(`${backendUrl}/api/admin/campus-issues/${duplicate.id}`, 0, {
+    status: 'closed', resolutionNote: 'The synthetic duplicate is already being tracked.'
+  });
+  await page.goto(`/campus-issues/${duplicate.id}`);
+  await expect(page.getByRole('heading', { name: 'Closure explanation' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Resolution note' })).toHaveCount(0);
+  await page.getByRole('link', { name: 'Back to My Reports' }).click();
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await expect(page.getByText(reviewed.adminResponse, { exact: true })).toBeVisible();
+  await page.getByLabel('Status', { exact: true }).selectOption('closed');
+  await expect(page.getByRole('heading', { name: 'Synthetic duplicate issue' })).toBeVisible();
+  await expect(page.getByRole('heading', { name: title })).toHaveCount(0);
+  await page.getByLabel('Category', { exact: true }).selectOption('electricity');
+  await expect(page.getByText('No reports match these filters.')).toBeVisible();
+
+  let reads = 0;
+  await page.route('**/api/campus-issues/mine?*', (route) => {
+    const params = new URL(route.request().url()).searchParams;
+    const requestedPage = Number(params.get('page'));
+    expect(params.get('limit')).toBe('10');
+    reads++;
+    if (reads === 1) return route.fulfill({ status: 503, json: { message: 'Synthetic report list outage' } });
+    return route.fulfill({ json: {
+      success: true, data: [requestedPage === 1 ? resolved : { ...duplicate, status: 'closed' }],
+      pagination: { page: requestedPage, totalPages: 2 }
+    } });
+  });
+  await page.reload();
+  await expect(page.getByRole('alert').getByText('Your reports could not be loaded.', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: 'Retry' }).click();
+  await expect(page.getByRole('heading', { name: title })).toBeVisible();
+  await page.getByRole('navigation', { name: 'Report pagination' }).getByRole('button', { name: 'Next' }).click();
+  await expect(page.getByRole('heading', { name: 'Synthetic duplicate issue' })).toBeVisible();
+  await expect(page.getByText('Page 2 of 2')).toBeVisible();
+});
+
+test('admin issue queue reviews, resolves and closes private reports with conflict recovery', async ({ page, browser, request }) => {
+  test.setTimeout(120_000);
+  const login = async (view, email) => {
+    await view.goto('/login');
+    await view.locator('input[type="email"]').fill(email);
+    await view.locator('input[type="password"]').fill(password);
+    await view.getByRole('button', { name: 'Login' }).click();
+    await expect(view).toHaveURL(/dashboard/);
+  };
+  const studentContext = await browser.newContext();
+  try {
+    const student = await studentContext.newPage();
+    await login(student, students[1].email);
+    await student.goto('/admin/campus-issues');
+    await expect(student).toHaveURL(/dashboard/);
+    await expect(student.getByRole('button', { name: /Account menu for/i })).toBeVisible();
+    const title = 'Synthetic admin review report';
+    const create = async (name) => {
+      await student.goto('/campus-issues/new');
+      await student.getByLabel('Title', { exact: true }).fill(name);
+      await student.getByLabel('Category', { exact: true }).selectOption('water');
+      await student.getByLabel('Description', { exact: true }).fill('Synthetic description ' + 'x'.repeat(250));
+      await student.getByRole('button', { name: 'Submit Report' }).click();
+      await expect(student.getByRole('heading', { name })).toBeVisible();
+      return new URL(student.url()).pathname;
+    };
+    const issuePath = await create(title);
+    const closedPath = await create('Synthetic duplicate for admin queue');
+    await student.getByRole('link', { name: 'Back to My Reports' }).click();
+    await expect(student.getByRole('heading', { name: title })).toBeVisible();
+
+    await login(page, adminEmail);
+    await page.goto('/admin');
+    await page.getByRole('link', { name: 'Campus Issues', exact: true }).click();
+    await expect(page.getByRole('heading', { name: 'Campus Issues Management' })).toBeVisible();
+    await page.getByLabel('Category', { exact: true }).selectOption('water');
+    await page.getByLabel('Status', { exact: true }).selectOption('submitted');
+    const search = page.getByLabel('Search reports');
+    await search.fill('no matching fictional report');
+    await expect(page.getByText('No campus issues match these filters.')).toBeVisible();
+    await search.fill(title);
+    const queue = page.getByRole('list', { name: 'Campus issue queue' });
+    await expect(queue.getByRole('heading', { name: title })).toBeVisible();
+    await queue.getByRole('button', { name: 'View / Review' }).click();
+    const editor = page.getByRole('region', { name: 'Report review' });
+    for (const width of [320, 390, 768, 1280, 1920]) {
+      await page.setViewportSize({ width, height: 900 });
+      await expect(editor.getByLabel('Review action')).toBeVisible();
+      await expect(search).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+    }
+    await editor.getByRole('button', { name: 'Start review' }).click();
+    await expect(editor.getByText('Under Review', { exact: true })).toBeVisible();
+
+    const admin = await request.post(`${backendUrl}/api/auth/login`, { data: { email: adminEmail, password } });
+    expect(admin.ok()).toBeTruthy();
+    const authorization = `Bearer ${(await admin.json()).token}`;
+    const endpoint = `${backendUrl}/api/admin${issuePath}`;
+    const loaded = await request.get(endpoint, { headers: { authorization } });
+    const { version } = (await loaded.json()).data;
+    const external = await request.patch(`${endpoint}/status`, {
+      headers: { authorization, 'If-Match': `"${version}"` },
+      data: { status: 'under_review', adminResponse: 'Concurrent synthetic response.' }
+    });
+    expect(external.ok()).toBeTruthy();
+    const response = editor.getByLabel('Admin response', { exact: true });
+    await response.fill('Unsaved synthetic response.');
+    await editor.getByRole('button', { name: 'Save response' }).click();
+    await expect(editor.getByRole('alert')).toContainText('Reload Latest');
+    await expect(response).toHaveValue('Unsaved synthetic response.');
+    await expect(editor.getByRole('button', { name: 'Save response' })).toBeDisabled();
+    page.once('dialog', (dialog) => dialog.dismiss());
+    await editor.getByRole('button', { name: 'Reload Latest' }).click();
+    await expect(response).toHaveValue('Unsaved synthetic response.');
+    page.once('dialog', (dialog) => dialog.accept());
+    await editor.getByRole('button', { name: 'Reload Latest' }).click();
+    await expect(response).toHaveValue('Concurrent synthetic response.');
+
+    let writes = 0;
+    await page.route('**/api/admin/campus-issues/*/status', (route) => {
+      writes++;
+      if (writes === 1) return route.fulfill({ status: 400, json: { message: 'Synthetic validation error.' } });
+      return route.continue();
+    });
+    const finalResponse = 'Latest synthetic admin response.';
+    await response.fill(finalResponse);
+    await editor.getByRole('button', { name: 'Save response' }).click();
+    await expect(editor.getByRole('alert')).toHaveText('Synthetic validation error.');
+    await expect(response).toHaveValue(finalResponse);
+    await editor.getByRole('button', { name: 'Save response' }).evaluate((button) => { button.click(); button.click(); });
+    await expect(editor.getByRole('status')).toHaveText('Report updated.');
+    expect(writes).toBe(2);
+    await student.getByRole('link', { name: `View report: ${title}` }).click();
+    await expect(student.getByText('Under Review', { exact: true })).toBeVisible();
+    await expect(student.getByText(finalResponse, { exact: true })).toBeVisible();
+
+    await editor.getByLabel('Review action').selectOption('resolved');
+    await editor.getByRole('button', { name: 'Resolve report' }).click();
+    await expect(editor.getByRole('alert')).toContainText('Enter a resolution note');
+    const note = 'The synthetic water fixture was checked and restored.';
+    await editor.getByLabel('Resolution note', { exact: true }).fill(note);
+    await editor.getByRole('button', { name: 'Resolve report' }).click();
+    await expect(editor.getByText('Resolved', { exact: true }).first()).toBeVisible();
+    await student.reload();
+    await expect(student.getByText(note, { exact: true })).toBeVisible();
+
+    await editor.getByRole('button', { name: 'Back to queue' }).click();
+    await search.fill('Synthetic duplicate for admin queue');
+    await queue.getByRole('button', { name: 'View / Review' }).click();
+    await editor.getByLabel('Review action').selectOption('closed');
+    await editor.getByRole('button', { name: 'Close report' }).click();
+    await expect(editor.getByRole('alert')).toContainText('Enter a closure explanation');
+    const explanation = 'This synthetic duplicate is already being tracked.';
+    await editor.getByLabel('Closure explanation', { exact: true }).fill(explanation);
+    await editor.getByRole('button', { name: 'Close report' }).click();
+    await expect(editor.getByRole('heading', { name: 'Closure explanation' })).toBeVisible();
+    await student.goto(closedPath);
+    await expect(student.getByText(explanation, { exact: true })).toBeVisible();
+
+    await editor.getByRole('button', { name: 'Back to queue' }).click();
+    await page.route('**/api/admin/campus-issues?*', (route) => route.fulfill({
+      status: 503, json: { message: 'Fixture queue unavailable' }
+    }), { times: 1 });
+    await search.fill('fixture queue unavailable');
+    await expect(page.getByRole('alert')).toContainText('The report queue could not be loaded.');
+    await page.getByRole('button', { name: 'Retry' }).click();
+    await expect(page.getByText('No campus issues match these filters.')).toBeVisible();
+
+    await page.route('**/api/admin/campus-issues?*', (route) => {
+      const params = new URL(route.request().url()).searchParams;
+      const pageNumber = Number(params.get('page'));
+      expect(params.get('limit')).toBe('10');
+      return route.fulfill({ json: {
+        success: true,
+        data: [{
+          id: issuePath.split('/').at(-1), title: `Synthetic page ${pageNumber}`, description: 'Fixture report',
+          status: 'submitted', category: 'water', version: 0
+        }],
+        pagination: { page: pageNumber, totalPages: 2 }
+      } });
+    });
+    await search.fill('Synthetic page');
+    await expect(queue.getByRole('heading', { name: 'Synthetic page 1' })).toBeVisible();
+    const pagination = page.getByRole('navigation', { name: 'Admin issue pagination' });
+    await expect(pagination.getByRole('button', { name: 'Previous' })).toBeDisabled();
+    await pagination.getByRole('button', { name: 'Next' }).click();
+    await expect(queue.getByRole('heading', { name: 'Synthetic page 2' })).toBeVisible();
+    await expect(pagination.getByRole('button', { name: 'Next' })).toBeDisabled();
+  } finally {
+    await studentContext.close();
+  }
 });
 
 for (const width of [320, 390, 768, 1280, 1920]) {

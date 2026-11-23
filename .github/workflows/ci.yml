@@ -63,4 +63,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Validate merged production Compose configuration
-        run: docker compose --env-file .env.production.example -f docker-compose.yml -f docker-compose.production.yml config --quiet
+        env:
+          CAMPUS_ISSUE_PRIVATE_EVIDENCE_ENABLED: 'true'
+        run: |
+          docker compose --env-file .env.production.example -f docker-compose.yml -f docker-compose.production.yml config --format json |
+            node -e '
+              const assert = require("node:assert/strict");
+              const { services } = JSON.parse(require("node:fs").readFileSync(0, "utf8"));
+              const ports = services.frontend.ports;
+              assert.equal(ports.length, 1);
+              assert.equal(ports[0].host_ip, "127.0.0.1");
+              assert.equal(ports[0].target, 80);
+              assert.equal(services.backend.ports?.length ?? 0, 0);
+              assert.equal(services.mongodb.ports?.length ?? 0, 0);
+              assert.equal(services.backend.environment.CAMPUS_ISSUE_PRIVATE_EVIDENCE_ENABLED, "false");
+            '

@@ -78,6 +78,7 @@ export default function Admin() {
               <Link to="/admin/academic-resources" className="ml-2 inline-flex mb-4 rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white">Academic resources</Link>
               <Link to="/admin/notices" className="ml-2 inline-flex mb-4 rounded-lg bg-violet-600 px-4 py-2 font-semibold text-white">Notice management</Link>
               <Link to="/admin/campus-locations" className="ml-2 inline-flex mb-4 rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white">Campus Locations</Link>
+              <Link to="/admin/campus-issues" className="ml-2 inline-flex mb-4 rounded-lg bg-blue-700 px-4 py-2 font-semibold text-white">Campus Issues</Link>
               <h1 className="text-section-title">Moderation Command Center</h1>
               <p className="text-body-sm mt-2">Review reports, block abusive users, and hide unsafe listings.</p>
             </div>

@@ -42,6 +42,11 @@ const adminPassword = process.env.ADMIN_PASSWORD || '';
 const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || '';
 const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD || '';
 const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+const configuredFrontendOrigins = frontendUrl.split(',').map((value) => value.trim()).filter(Boolean);
+const frontendOrigins = Object.freeze([...new Set([
+  ...configuredFrontendOrigins,
+  ...(nodeEnv === 'development' ? ['http://localhost:8080', 'http://localhost:5173'] : [])
+])]);
 const trustProxyHops = Number(process.env.TRUST_PROXY_HOPS || 0);
 const productImageMaxCount = Number(process.env.PRODUCT_IMAGE_MAX_COUNT || 5);
 const productImageMaxSizeMb = Number(process.env.PRODUCT_IMAGE_MAX_SIZE_MB || 5);
@@ -134,8 +139,7 @@ if (nodeEnv === 'production') {
   if (trustProxyHops < 1) {
     throw new Error('Production requires TRUST_PROXY_HOPS to match the trusted ingress proxy chain');
   }
-  const frontendOrigins = frontendUrl.split(',').map((value) => value.trim()).filter(Boolean);
-  if (!frontendOrigins.length || frontendOrigins.some((origin) => {
+  if (!configuredFrontendOrigins.length || configuredFrontendOrigins.some((origin) => {
     try {
       const parsed = new URL(origin);
       return parsed.protocol !== 'https:' || parsed.pathname !== '/' || Boolean(parsed.search || parsed.hash || parsed.username || parsed.password);
@@ -164,6 +168,7 @@ export const env = {
   jwtSecret: process.env.JWT_SECRET,
   jwtExpiresIn: process.env.JWT_EXPIRES_IN || '7d',
   frontendUrl,
+  frontendOrigins,
   databaseConnectTimeoutMs: Number(process.env.DATABASE_CONNECT_TIMEOUT_MS) || 5000,
   databaseRetryIntervalMs: Number(process.env.DATABASE_RETRY_INTERVAL_MS) || 30000,
   rateLimitWindowMs: Number(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000,

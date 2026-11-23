@@ -5,7 +5,7 @@ export const COLLEGE_SERVICE_ITEMS = freezeItems([
   { href: '/my-department', label: 'My Department' },
   { href: '/notices', label: 'Notice Board' },
   { href: '/campus-map', label: 'Campus Map' },
-  { label: 'Campus Issues', disabled: true, status: 'Coming soon' }
+  { href: '/campus-issues', label: 'Campus Issues', studentOnly: true }
 ]);
 
 export const BASE_NAVIGATION_SECTIONS = Object.freeze([
@@ -27,7 +27,9 @@ export const BASE_NAVIGATION_SECTIONS = Object.freeze([
 
 export const getNavigationSections = (role) => BASE_NAVIGATION_SECTIONS.map((section) => ({
   ...section,
-  items: section.id === 'account' && ADMIN_ROLES.has(role) ? [...section.items, { href: '/admin', label: 'Admin' }] : [...section.items]
+  items: section.id === 'account' && ADMIN_ROLES.has(role)
+    ? [...section.items, { href: '/admin', label: 'Admin' }]
+    : section.items.filter((item) => !item.studentOnly || role === 'student')
 }));
 
 export const getNavigationLinks = (role) => getNavigationSections(role).flatMap((section) => section.items.filter((item) => item.href));

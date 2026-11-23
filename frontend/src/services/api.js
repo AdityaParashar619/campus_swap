@@ -103,6 +103,39 @@ export const campusLocationAPI = {
   getById: (id, { signal } = {}) => API.get(`/campus-locations/${encodeURIComponent(id)}`, { signal })
 };
 
+const studentIssuePath = (id) => `/campus-issues/${encodeURIComponent(id)}`;
+const loadIssueEvidence = (path, photoId, signal) =>
+  API.get(`${path}/evidence/${encodeURIComponent(photoId)}`, { responseType: 'blob', signal });
+
+export const campusIssueAPI = {
+  listMine: (params, signal) => API.get('/campus-issues/mine', { params, signal }),
+  get: (id, signal) => API.get(studentIssuePath(id), { signal }),
+  evidence: (id, photoId, signal) => loadIssueEvidence(studentIssuePath(id), photoId, signal),
+  create: (data, photos = [], submissionKey) => {
+    if (!submissionKey) return API.post('/campus-issues', data);
+    const form = new FormData();
+    form.append('issue', JSON.stringify(data));
+    form.append('submissionKey', submissionKey);
+    photos.forEach((file) => form.append('photos', file));
+    return API.post('/campus-issues', form, { timeout: 75_000 });
+  }
+};
+
+const adminIssuePath = '/admin/campus-issues';
+const issuePath = (id) => `${adminIssuePath}/${encodeURIComponent(id)}`;
+
+export const adminCampusIssueAPI = {
+  list: (params, signal) => API.get(adminIssuePath, { params, signal }),
+  get: (id, signal) => API.get(issuePath(id), { signal }),
+  evidence: (id, photoId, signal) => loadIssueEvidence(issuePath(id), photoId, signal),
+  deleteTestReport: (id, version, confirmation) => API.delete(`${issuePath(id)}/test-report`, {
+    data: { confirmation }, headers: { 'If-Match': `"${version}"` }, timeout: 30_000
+  }),
+  updateStatus: (id, data, ifMatch) => API.patch(`${issuePath(id)}/status`, data, {
+    headers: { 'If-Match': ifMatch }
+  })
+};
+
 const adminLocationPath = '/admin/campus-locations';
 const locationPath = (id) => `${adminLocationPath}/${encodeURIComponent(id)}`;
 const locationVersion = (version) => {

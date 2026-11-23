@@ -22,7 +22,8 @@ test('College Services enables My Department, Notice Board and Campus Map', () =
   assert.deepEqual(section.items[0], { href: '/my-department', label: 'My Department' });
   assert.deepEqual(section.items[1], { href: '/notices', label: 'Notice Board' });
   assert.deepEqual(section.items[2], { href: '/campus-map', label: 'Campus Map' });
-  assert.equal(section.items[3].disabled, true);
+  assert.deepEqual(section.items[3], { href: '/campus-issues', label: 'Campus Issues', studentOnly: true });
+  assert.equal(getNavigationLinks('admin').some((link) => link.href === '/campus-issues'), false);
 });
 
 test('each supported administrator role receives the role-protected admin destination', () => {

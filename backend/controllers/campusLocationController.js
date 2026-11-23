@@ -3,18 +3,9 @@ import CampusLocation, { hasCoordinatePair, LOCATION_TEXT_LIMITS } from '../mode
 import { asyncHandler } from '../middleware/errorMiddleware.js';
 import { BadRequest, Conflict, NotFound } from '../utils/AppError.js';
 import { normalizeLocation, parseLocationList, readCoordinateReview, requireFields } from '../utils/campusLocationValidation.js';
+import { publishedCampusLocationFilter } from '../utils/campusLocationVisibility.js';
 
 const publicFields = [...Object.keys(LOCATION_TEXT_LIMITS), 'category', 'latitude', 'longitude', 'buildingCode', 'aliases'];
-const publicFilter = () => ({
-  status: 'published',
-  coordinateVerificationStatus: 'verified',
-  latitude: { $gte: -90, $lte: 90 },
-  longitude: { $gte: -180, $lte: 180 },
-  coordinateSource: { $type: 'string', $ne: '' },
-  coordinateVerifiedAt: { $type: 'date' },
-  coordinateVerifiedBy: { $type: 'objectId' },
-  publishedAt: { $type: 'date', $lte: new Date() }
-});
 const publicView = ({ _id, ...data }) => ({ id: String(_id), ...data });
 const assertId = (id) => {
   if (!mongoose.isObjectIdOrHexString(id)) throw new BadRequest('Invalid campus location ID');
@@ -22,7 +13,7 @@ const assertId = (id) => {
 
 const list = (admin) => asyncHandler(async (req, res) => {
   const { filter, page, limit, skip } = parseLocationList(req.query, admin);
-  const criteria = admin ? filter : { ...filter, ...publicFilter() };
+  const criteria = admin ? filter : { ...filter, ...publishedCampusLocationFilter() };
   const query = CampusLocation.find(criteria).sort({ name: 1, _id: 1 }).skip(skip).limit(limit);
   if (!admin) query.select(publicFields.join(' '));
   const [locations, total] = await Promise.all([query.lean(), CampusLocation.countDocuments(criteria)]);
@@ -33,7 +24,7 @@ const list = (admin) => asyncHandler(async (req, res) => {
 
 const detail = (admin) => asyncHandler(async (req, res) => {
   assertId(req.params.id);
-  const criteria = { _id: req.params.id, ...(!admin && publicFilter()) };
+  const criteria = { _id: req.params.id, ...(!admin && publishedCampusLocationFilter()) };
   const query = CampusLocation.findOne(criteria);
   if (!admin) query.select(publicFields.join(' '));
   const location = await query.lean();

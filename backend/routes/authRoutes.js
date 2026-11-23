@@ -26,8 +26,7 @@ import { avatarUploadMiddleware } from '../middleware/avatarUploadMiddleware.js'
 
 const requireTrustedOrigin = (req, res, next) => {
   const origin = req.get('origin');
-  const allowed = env.frontendUrl.split(',').map((value) => value.trim()).filter(Boolean);
-  if (!origin || !allowed.includes(origin)) return res.status(403).json({ success: false, message: 'Request origin is not allowed.' });
+  if (!env.frontendOrigins.includes(origin)) return res.status(403).json({ success: false, message: 'Request origin is not allowed.' });
   next();
 };
 

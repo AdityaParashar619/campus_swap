@@ -17,6 +17,7 @@ import { requireRole } from '../middleware/authMiddleware.js';
 import { archiveNotice, createNotice, getAdminNotice, listAdminNotices, publishNotice, removeAttachment, updateNotice, uploadAttachments } from '../controllers/noticeAdminController.js';
 import { creationLimiter } from '../middleware/securityMiddleware.js';
 import { noticeAttachmentUploadMiddleware } from '../middleware/noticeAttachmentUploadMiddleware.js';
+import { deleteTestIssue, getAdminIssue, getAdminIssueEvidence, listAdminIssues, updateIssueStatus } from '../controllers/campusIssueController.js';
 import {
   archiveLocation, createLocation, getAdminLocation, listAdminLocations,
   publishLocation, updateLocation, verifyLocation
@@ -44,6 +45,13 @@ router.patch('/campus-locations/:id', locationAdmin, updateLocation);
 router.post('/campus-locations/:id/verify-coordinates', locationAdmin, verifyLocation);
 router.post('/campus-locations/:id/publish', locationAdmin, publishLocation);
 router.post('/campus-locations/:id/archive', locationAdmin, archiveLocation);
+
+const issueAdmin = requireRole('admin', 'college_admin', 'super_admin');
+router.get('/campus-issues', issueAdmin, listAdminIssues);
+router.get('/campus-issues/:id', issueAdmin, getAdminIssue);
+router.get('/campus-issues/:id/evidence/:photoId', issueAdmin, getAdminIssueEvidence);
+router.patch('/campus-issues/:id/status', issueAdmin, updateIssueStatus);
+router.delete('/campus-issues/:id/test-report', issueAdmin, deleteTestIssue);
 
 router.get('/academic-resources', requireRole('admin', 'college_admin', 'super_admin'), listAcademicResources);
 router.post('/academic-resources', requireRole('admin', 'college_admin', 'super_admin'), createAcademicResource);

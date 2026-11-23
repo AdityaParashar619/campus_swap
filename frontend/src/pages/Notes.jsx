@@ -1,5 +1,5 @@
 import { motion } from 'framer-motion';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Button, PageTransition, PremiumCard } from '../components/ui';
 import Layout from '../layouts/Layout';
 import { getApiErrorMessage, noteAPI } from '../services/api';
@@ -18,6 +18,8 @@ export default function Notes() {
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
   const [previewNote, setPreviewNote] = useState(null);
+  const previewDialog = useRef(null);
+  const previewButton = useRef(null);
   const [bookmarked, setBookmarked] = useState({});
   const [error, setError] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -79,8 +81,15 @@ export default function Notes() {
     }
   };
 
-  const openPreview = (note) => {
-    if (safeHttpsUrl(note.fileUrl)) setPreviewNote(note);
+  useEffect(() => {
+    if (previewNote && !previewDialog.current.open) previewDialog.current.showModal();
+  }, [previewNote]);
+
+  const openPreview = (note, button) => {
+    if (safeHttpsUrl(note.fileUrl)) {
+      previewButton.current = button;
+      setPreviewNote(note);
+    }
     else setError('This preserved note has an unsafe or unavailable file URL and cannot be opened.');
   };
 
@@ -136,7 +145,7 @@ export default function Notes() {
                       <p className="text-body-sm mb-2">{note.subject} · {note.branch} · Semester {note.semester}</p>
                       <p className="text-body-sm mb-4 line-clamp-2">{note.description || 'No description provided.'}</p>
                       <div className="flex gap-2 flex-wrap">
-                        <Button size="sm" variant="secondary" onClick={() => openPreview(note)} disabled={!safeHttpsUrl(note.fileUrl)}>Preview</Button>
+                        <Button size="sm" variant="secondary" onClick={(event) => openPreview(note, event.currentTarget)} disabled={!safeHttpsUrl(note.fileUrl)}>Preview</Button>
                         {safeHttpsUrl(note.fileUrl) && <a href={safeHttpsUrl(note.fileUrl)} target="_blank" rel="noopener noreferrer" className="px-4 py-2 rounded-xl bg-blue-600 text-white text-sm font-semibold">Open</a>}
                         <Button size="sm" variant={bookmarked[note._id] ? 'gradient' : 'secondary'} onClick={() => toggleBookmark(note._id)}>
                           {bookmarked[note._id] ? 'Bookmarked' : 'Bookmark'}
@@ -151,17 +160,18 @@ export default function Notes() {
         </div>
 
         {previewNote && (
-          <div role="dialog" aria-modal="true" aria-labelledby="note-preview-title" className="fixed inset-0 z-50 bg-slate-950/60 backdrop-blur-sm flex items-center justify-center p-4">
-            <div className="premium-card w-full max-w-4xl p-4">
-              <div className="flex items-center justify-between mb-3">
-                <h3 id="note-preview-title" className="font-semibold">Preview: {previewNote.title}</h3>
-                <Button size="sm" variant="secondary" onClick={() => setPreviewNote(null)}>Close</Button>
+          <dialog ref={previewDialog} aria-labelledby="note-preview-title" onClose={() => {
+            setPreviewNote(null);
+            previewButton.current?.focus();
+          }} className="premium-card m-auto w-[calc(100%-2rem)] max-w-4xl p-4 text-slate-900 backdrop:bg-slate-950/60 dark:text-white">
+              <div className="mb-3 flex items-center justify-between gap-2">
+                <h3 id="note-preview-title" className="min-w-0 break-words font-semibold">Preview: {previewNote.title}</h3>
+                <form method="dialog"><Button type="submit" size="sm" variant="secondary" autoFocus>Close</Button></form>
               </div>
               <div className="h-[70vh] rounded-xl overflow-hidden border border-slate-200/30 bg-white">
                 {previewNote.fileType === 'image' ? <img src={safeHttpsUrl(previewNote.fileUrl)} alt={previewNote.title} className="w-full h-full object-contain" /> : <iframe sandbox="" referrerPolicy="no-referrer" src={safeHttpsUrl(previewNote.fileUrl)} title="Note preview" className="w-full h-full" />}
               </div>
-            </div>
-          </div>
+          </dialog>
         )}
       </Layout>
     </PageTransition>
