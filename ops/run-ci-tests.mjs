@@ -176,10 +176,74 @@ try {
     } catch {
       throw new Error('Chromium did not produce a test report. Check the browser installation and fixture readiness.');
     }
+    const responsiveSpec = 'phase49-audit.spec.js';
+    const responsiveTest = 'representative public, student and admin screens fit six viewport widths';
+    const routes = new Set([
+      '/login', '/signup', '/dashboard', '/listings', '/listings/:id', '/chat', '/network', '/bounties',
+      '/notes', '/my-department', '/notices', '/campus-map', '/campus-issues',
+      '/admin', '/admin/campus-locations', '/admin/campus-issues'
+    ]);
+    const assertions = new Set([
+      'navigation', 'toHaveURL', 'toBeVisible', 'measureHorizontalOverflow', 'toBeLessThanOrEqual'
+    ]);
+    const number = value => Number.isInteger(value) && value >= 0 && value <= 1_000_000 ? value : null;
+    const printDiagnostic = (spec, result, detail = {}) => {
+      const errorLocation = result.errorLocation;
+      const sameFile = typeof errorLocation?.file === 'string' &&
+        errorLocation.file.split(/[\\/]/).at(-1) === responsiveSpec;
+      const dimensions = detail.dimensions;
+      console.log('Chromium diagnostic:', JSON.stringify({
+        test: responsiveTest,
+        route: routes.has(detail.route) ? detail.route : null,
+        viewportWidth: number(detail.viewport?.width),
+        viewportHeight: number(detail.viewport?.height),
+        assertion: assertions.has(detail.assertion) ? detail.assertion :
+          result.status === 'timedOut' ? 'testTimeout' : 'unclassified',
+        expected: number(dimensions?.expected),
+        actual: number(dimensions?.actual),
+        documentClientWidth: number(dimensions?.documentClientWidth),
+        documentScrollWidth: number(dimensions?.documentScrollWidth),
+        windowInnerWidth: number(dimensions?.windowInnerWidth),
+        mainClientWidth: number(dimensions?.mainClientWidth),
+        mainScrollWidth: number(dimensions?.mainScrollWidth),
+        browserVersion: typeof detail.browserVersion === 'string' &&
+          /^\d{1,4}(?:\.\d{1,6}){1,3}$/.test(detail.browserVersion) ? detail.browserVersion : null,
+        durationMs: number(result.duration),
+        source: {
+          file: responsiveSpec,
+          line: number(detail.line) ?? (sameFile ? number(errorLocation.line) : null) ?? number(spec.line),
+          column: number(detail.column) ?? (sameFile ? number(errorLocation.column) : null)
+        }
+      }));
+    };
+    const showResponsiveDiagnostics = spec => {
+      for (const test of spec.tests) {
+        for (const result of test.results) {
+          if (!['failed', 'timedOut', 'interrupted'].includes(result.status)) continue;
+          let attached = false;
+          for (const attachment of result.attachments ?? []) {
+            if (attachment.name !== 'responsive-assertion' || attachment.contentType !== 'application/json' ||
+                typeof attachment.body !== 'string' || attachment.body.length > 4096) continue;
+            let detail;
+            try {
+              detail = JSON.parse(Buffer.from(attachment.body, 'base64').toString('utf8'));
+            } catch {
+              continue;
+            }
+            if (!detail || !assertions.has(detail.assertion)) continue;
+            printDiagnostic(spec, result, detail);
+            attached = true;
+          }
+          if (!attached) printDiagnostic(spec, result);
+        }
+      }
+    };
     const showFailures = suites => {
       for (const item of suites) {
         for (const spec of item.specs ?? []) {
-          if (!spec.ok) console.log('Failed Chromium test:', spec.file, spec.line, spec.title);
+          if (spec.ok) continue;
+          console.log('Failed Chromium test:', spec.file, spec.line, spec.title);
+          if (spec.file === responsiveSpec && spec.title === responsiveTest) showResponsiveDiagnostics(spec);
         }
         showFailures(item.suites ?? []);
       }

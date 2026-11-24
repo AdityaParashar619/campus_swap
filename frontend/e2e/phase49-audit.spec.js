@@ -89,14 +89,55 @@ test('Marketplace ownership and favorites, private request offers, and keyboard 
   await expect(preview).toBeFocused();
 });
 
-test('representative public, student and admin screens fit six viewport widths', async ({ page, request, browser }) => {
+test('representative public, student and admin screens fit six viewport widths', async ({ page, request, browser }, testInfo) => {
   test.setTimeout(180_000);
+  const reportFailure = async (view, route, assertion, error, dimensions = {}) => {
+    const location = /phase49-audit\.spec\.js:(\d+):(\d+)/.exec(error?.stack ?? '');
+    const pathname = new URL(route, 'http://127.0.0.1').pathname;
+    await testInfo.attach('responsive-assertion', {
+      contentType: 'application/json',
+      body: JSON.stringify({
+        route: pathname.startsWith('/listings/') ? '/listings/:id' : pathname,
+        assertion,
+        viewport: view.viewportSize(),
+        browserVersion: browser.version(),
+        line: location ? Number(location[1]) : null,
+        column: location ? Number(location[2]) : null,
+        dimensions
+      })
+    }).catch(() => {}); // Keep the original assertion failure if diagnostic attachment fails.
+  };
   const screen = async (view, route, width) => {
-    await view.goto(route);
-    await expect(view).toHaveURL(new RegExp(route.replaceAll('/', '\\/') + '$'));
-    await expect(view.getByRole('heading').first()).toBeVisible();
-    const overflow = await view.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
-    expect.soft(overflow, `${route} at ${width}px`).toBeLessThanOrEqual(1);
+    let assertion = 'navigation';
+    try {
+      await view.goto(route);
+      assertion = 'toHaveURL';
+      await expect(view).toHaveURL(new RegExp(route.replaceAll('/', '\\/') + '$'));
+      assertion = 'toBeVisible';
+      await expect(view.getByRole('heading').first()).toBeVisible();
+      assertion = 'measureHorizontalOverflow';
+      const dimensions = await view.evaluate(() => {
+        const main = document.querySelector('main');
+        return {
+          documentClientWidth: document.documentElement.clientWidth,
+          documentScrollWidth: document.documentElement.scrollWidth,
+          windowInnerWidth: window.innerWidth,
+          mainClientWidth: main?.clientWidth,
+          mainScrollWidth: main?.scrollWidth
+        };
+      });
+      const overflow = dimensions.documentScrollWidth - dimensions.documentClientWidth;
+      const previousErrors = testInfo.errors.length;
+      expect.soft(overflow, `${route} at ${width}px`).toBeLessThanOrEqual(1);
+      if (testInfo.errors.length > previousErrors) {
+        await reportFailure(view, route, 'toBeLessThanOrEqual', testInfo.errors[previousErrors], {
+          ...dimensions, expected: 1, actual: overflow
+        });
+      }
+    } catch (error) {
+      await reportFailure(view, route, assertion, error);
+      throw error;
+    }
   };
   for (const width of widths) {
     await page.setViewportSize({ width, height: 900 });
