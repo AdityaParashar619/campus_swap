@@ -23,7 +23,7 @@ test('forgot password sends the six-digit OTP to the normalized registered SATI 
   const handler = createForgotPasswordHandler({
     findAccount: async (email) => {
       lookupEmail = email;
-      return { _id: 'student-test-id', email: 'example27cs987@satiengg.in' };
+      return { _id: 'student-test-id', email: 'EXAMPLE27CS987@SATIENGG.IN' };
     },
     findPending: async () => null,
     savePending: async (_email, update) => {
@@ -33,7 +33,7 @@ test('forgot password sends the six-digit OTP to the normalized registered SATI 
     deliverCode: async (message) => { sent = message; return {}; }
   });
 
-  const { res } = await invoke(handler, { body: { email: '  example27cs987@satiengg.in ' }, requestId: 'forgot-delivery-test' });
+  const { res } = await invoke(handler, { body: { email: '  EXAMPLE27CS987@SATIENGG.IN ' }, requestId: 'forgot-delivery-test' });
   assert.equal(res.statusCode, 200);
   assert.equal(lookupEmail, 'example27cs987@satiengg.in');
   assert.equal(sent.to, 'example27cs987@satiengg.in');

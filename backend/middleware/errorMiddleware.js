@@ -48,7 +48,7 @@ export const errorHandler = (err, req, res, next) => {
   });
 
   if (status >= 500) {
-    const diagnostic = error instanceof Error
+    const diagnostic = env.nodeEnv === 'production' ? `Request failed (HTTP ${status})` : error instanceof Error
       ? error.stack || error.message || 'Error without stack or message'
       : `Non-Error rejection: ${JSON.stringify({ name: error.name, status: error.status, code: error.code, message: error.message })}`;
     console.error(`[${req.requestId || 'n/a'}]`, diagnostic || 'Unknown server error');

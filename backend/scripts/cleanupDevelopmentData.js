@@ -4,8 +4,6 @@ import mongoose from 'mongoose';
 import { v2 as cloudinary } from 'cloudinary';
 
 const ALLOWED_DATABASES = new Set(['campusswap']);
-const EXPECTED_ADMIN_ID = '000000000000000000000001';
-const EXPECTED_ADMIN_EMAIL = 'example27cs987@satiengg.in';
 const EXECUTION_CONFIRMATION = 'DELETE_DEVELOPMENT_DATA';
 const CLOUDINARY_PRODUCT_PREFIX = 'campusswap/products/';
 const CLOUDINARY_AVATAR_PREFIX = 'campusswap/avatars/';
@@ -71,7 +69,13 @@ const main = async () => {
   if (process.env.NODE_ENV !== 'development') fail('NODE_ENV must be exactly development.');
   if (!ALLOWED_DATABASES.has(args.database)) fail('Database is not explicitly allowlisted.');
   if (args.database !== 'campusswap') fail('Unexpected database name.');
-  if (args['admin-id'] !== EXPECTED_ADMIN_ID) fail('Administrator ID does not match the reviewed account.');
+  const reviewedAdminId = process.env.CLEANUP_EXPECTED_ADMIN_ID;
+  const reviewedAdminEmail = process.env.CLEANUP_EXPECTED_ADMIN_EMAIL?.trim().toLowerCase();
+  if (!/^[0-9a-f]{24}$/.test(reviewedAdminId ?? '') ||
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(reviewedAdminEmail ?? '')) {
+    fail('Supply the independently reviewed administrator ID and email in CLEANUP_EXPECTED_ADMIN_ID and CLEANUP_EXPECTED_ADMIN_EMAIL.');
+  }
+  if (args['admin-id'] !== reviewedAdminId) fail('Administrator ID does not match the reviewed account.');
   if (executeRequested && args.confirm !== EXECUTION_CONFIRMATION) fail('Execution confirmation is missing or incorrect.');
 
   await assertBackup();
@@ -89,9 +93,9 @@ const main = async () => {
   if (db.databaseName !== args.database) fail('Connected database identity changed unexpectedly.');
 
   const users = db.collection('users');
-  const adminObjectId = new mongoose.Types.ObjectId(EXPECTED_ADMIN_ID);
+  const adminObjectId = new mongoose.Types.ObjectId(reviewedAdminId);
   const admin = await users.findOne({ _id: adminObjectId });
-  if (!admin || admin.role !== 'admin' || admin.email !== EXPECTED_ADMIN_EMAIL) {
+  if (!admin || admin.role !== 'admin' || admin.email !== reviewedAdminEmail) {
     fail('Preserved administrator identity, email, or role does not match the reviewed account.');
   }
 
@@ -183,7 +187,7 @@ const main = async () => {
   );
 
   const preserved = await users.findOne({ _id: adminObjectId });
-  if (!preserved || preserved.email !== EXPECTED_ADMIN_EMAIL || preserved.role !== 'admin') {
+  if (!preserved || preserved.email !== reviewedAdminEmail || preserved.role !== 'admin') {
     fail('Post-cleanup administrator verification failed. Restore the reviewed backup.');
   }
   const after = await collectionCounts(db, allCollections);

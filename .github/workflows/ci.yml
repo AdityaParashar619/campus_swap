@@ -78,3 +78,44 @@ jobs:
               assert.equal(services.mongodb.ports?.length ?? 0, 0);
               assert.equal(services.backend.environment.CAMPUS_ISSUE_PRIVATE_EVIDENCE_ENABLED, "false");
             '
+
+  deployment-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Validate the restricted Render service
+        run: |
+          ruby -ryaml -e '
+            service, *other = YAML.safe_load_file("render.yaml").fetch("services")
+            expected = {
+              "type" => "web", "runtime" => "docker", "plan" => "free",
+              "dockerfilePath" => "./Dockerfile.same-origin", "dockerContext" => ".",
+              "healthCheckPath" => "/health", "autoDeployTrigger" => "off"
+            }
+            abort "Unexpected Render service settings" unless other.empty? && service.slice(*expected.keys) == expected
+            vars = service.fetch("envVars").to_h { |entry| [entry.fetch("key"), entry] }
+            defaults = {
+              "NODE_ENV" => "production", "SERVE_FRONTEND" => "true",
+              "CAMPUSSWAP_DEMO_MODE" => "true", "EMAIL_PROVIDER" => "disabled",
+              "OTP_MOCK_ENABLED" => "false", "CAMPUS_ISSUE_PRIVATE_EVIDENCE_ENABLED" => "false"
+            }
+            inputs = %w[MONGO_URI JWT_SECRET OTP_PEPPER FRONTEND_URL TRUST_PROXY_HOPS]
+            abort "Unexpected Render environment keys" unless vars.keys.sort == (defaults.keys + inputs).sort
+            defaults.each { |key, value| abort "Unexpected demo default" unless vars.fetch(key) == { "key" => key, "value" => value } }
+            inputs.each { |key| abort "Render must prompt for runtime inputs" unless vars.fetch(key) == { "key" => key, "sync" => false } }
+          '
+      - name: Build and inspect the same-origin image
+        run: |
+          canary=$(node -p 'require("node:crypto").randomUUID()')
+          mkdir -p backend/backups frontend/src/private-attachments frontend/test-results
+          printf '%s\n' "$canary" > backend/.env.ci-canary
+          printf '%s\n' "VITE_SOCKET_URL=https://$canary.example.invalid" > frontend/.env.production.local
+          printf '%s\n' "$canary" > backend/backups/ci-canary.archive
+          printf '%s\n' "$canary" > frontend/src/private-attachments/ci-canary.js
+          printf '%s\n' "$canary" > frontend/test-results/trace.zip
+          docker build --file Dockerfile.same-origin --tag campusswap-ci:local .
+          test "$(docker image inspect --format '{{.Config.User}}' campusswap-ci:local)" = node
+          DEPLOYMENT_AUDIT_CANARIES="$canary" node ops/inspectDeploymentImage.cjs campusswap-ci:local

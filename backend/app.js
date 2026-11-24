@@ -1,6 +1,8 @@
 import cors from 'cors';
 import express from 'express';
-import mongoose from 'mongoose';
+import { existsSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { isDatabaseReady } from './config/db.js';
 import { env } from './config/env.js';
 import { requireDatabase } from './middleware/databaseMiddleware.js';
 import { errorHandler } from './middleware/errorMiddleware.js';
@@ -34,6 +36,7 @@ export const createApp = ({ databaseMiddleware = requireDatabase } = {}) => {
   const app = express();
   app.set('trust proxy', env.trustProxyHops);
 
+  app.use(requestMetaMiddleware);
   app.use(cors(corsOptions));
   app.use(express.json({ limit: '2mb' }));
   app.use((req, _res, next) => {
@@ -50,11 +53,10 @@ export const createApp = ({ databaseMiddleware = requireDatabase } = {}) => {
       next();
     }
   });
-  app.use(requestMetaMiddleware);
   app.use(securityMiddleware);
 
   const healthHandler = (_req, res) => {
-    const databaseReady = mongoose.connection.readyState === 1;
+    const databaseReady = isDatabaseReady();
     res.status(databaseReady ? 200 : 503).json({
       success: databaseReady,
       status: databaseReady ? 'OK' : 'DEGRADED',
@@ -85,8 +87,32 @@ export const createApp = ({ databaseMiddleware = requireDatabase } = {}) => {
   app.use('/api/requests', requestRoutes);
   app.use('/api/admin', adminRoutes);
 
-  app.use((req, res) => {
-    res.status(404).json({ success: false, message: `Endpoint not found: ${req.originalUrl}` });
+  if (env.serveFrontend) {
+    const frontend = fileURLToPath(new URL('./public/', import.meta.url));
+    if (!existsSync(new URL('./public/index.html', import.meta.url))) {
+      throw new Error('Same-origin serving requires the built frontend in backend/public');
+    }
+
+    const assets = fileURLToPath(new URL('./public/assets/', import.meta.url));
+    const staticFrontend = express.static(frontend, {
+      index: false, redirect: false,
+      setHeaders(res, file) {
+        if (file.startsWith(assets)) res.set('Cache-Control', 'public, max-age=31536000, immutable');
+        else if (file.endsWith('index.html')) res.set('Cache-Control', 'no-cache');
+      }
+    });
+    app.use((req, res, next) => {
+      if (/^\/(?:api|socket\.io)(?:\/|$)/i.test(req.path)) return next();
+      staticFrontend(req, res, next);
+    });
+    app.get('*', (req, res, next) => {
+      if (/^\/(?:api|socket\.io|assets)(?:\/|$)/i.test(req.path) || !req.accepts('html')) return next();
+      res.set('Cache-Control', 'no-cache').sendFile('index.html', { root: frontend });
+    });
+  }
+
+  app.use((_req, res) => {
+    res.status(404).json({ success: false, message: 'Endpoint not found' });
   });
   app.use(errorHandler);
 

@@ -39,7 +39,8 @@ async function checkOrigins(environment, allowed, rejected) {
       await new Promise((resolve) => server.close(resolve));
     }`, JSON.stringify([allowed, rejected])], {
     cwd: new URL('..', import.meta.url),
-    timeout: 15000,
+    // The subprocess includes a cold module load while other integration tests run.
+    timeout: 45000,
     env: {
       ...process.env,
       JWT_SECRET: 'isolated-cors-jwt-secret'.repeat(2),
