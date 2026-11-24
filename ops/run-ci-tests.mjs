@@ -186,12 +186,32 @@ try {
     const assertions = new Set([
       'navigation', 'toHaveURL', 'toBeVisible', 'measureHorizontalOverflow', 'toBeLessThanOrEqual'
     ]);
+    const networkComponents = new Set([
+      'incoming-card', 'status-grid', 'trusted-grid', 'search-controls', 'discovery-skeletons',
+      'discovery-grid', 'discovery-card', 'discovery-bio', 'discovery-actions'
+    ]);
     const number = value => Number.isInteger(value) && value >= 0 && value <= 1_000_000 ? value : null;
+    const coordinate = value => Number.isInteger(value) && Math.abs(value) <= 1_000_000 ? value : null;
     const printDiagnostic = (spec, result, detail = {}) => {
       const errorLocation = result.errorLocation;
       const sameFile = typeof errorLocation?.file === 'string' &&
         errorLocation.file.split(/[\\/]/).at(-1) === responsiveSpec;
       const dimensions = detail.dimensions;
+      const components = detail.route === '/network' && Array.isArray(dimensions?.components)
+        ? dimensions.components.filter(item => networkComponents.has(item?.component)).slice(0, 6).map(item => ({
+          component: item.component,
+          left: coordinate(item.left), right: coordinate(item.right), width: number(item.width),
+          clientWidth: number(item.clientWidth), scrollWidth: number(item.scrollWidth),
+          parentClientWidth: number(item.parentClientWidth),
+          minWidth: typeof item.minWidth === 'string' &&
+            /^(?:auto|\d{1,6}(?:\.\d{1,3})?px)$/.test(item.minWidth) ? item.minWidth : null,
+          display: ['block', 'flex', 'grid', 'inline', 'inline-block', 'inline-flex', 'inline-grid',
+            'flow-root', '-webkit-box'].includes(item.display) ? item.display : null,
+          flexShrink: Number.isFinite(item.flexShrink) && item.flexShrink >= 0 &&
+            item.flexShrink <= 1000 ? item.flexShrink : null,
+          whiteSpace: ['normal', 'nowrap', 'pre', 'pre-wrap', 'pre-line', 'break-spaces'].includes(item.whiteSpace)
+            ? item.whiteSpace : null
+        })) : [];
       console.log('Chromium diagnostic:', JSON.stringify({
         test: responsiveTest,
         route: routes.has(detail.route) ? detail.route : null,
@@ -206,6 +226,9 @@ try {
         windowInnerWidth: number(dimensions?.windowInnerWidth),
         mainClientWidth: number(dimensions?.mainClientWidth),
         mainScrollWidth: number(dimensions?.mainScrollWidth),
+        networkState: detail.route === '/network' && ['loading', 'loaded', 'empty', 'error'].includes(dimensions?.networkState)
+          ? dimensions.networkState : null,
+        components,
         browserVersion: typeof detail.browserVersion === 'string' &&
           /^\d{1,4}(?:\.\d{1,6}){1,3}$/.test(detail.browserVersion) ? detail.browserVersion : null,
         durationMs: number(result.duration),
