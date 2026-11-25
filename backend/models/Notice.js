@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { academicPrograms } from '../config/academicProgramData.js';
+import { assetFolder } from '../utils/cloudinaryNamespace.js';
 
 export const NOTICE_CATEGORIES = Object.freeze(['academic', 'examination', 'placement', 'event', 'general']);
 export const NOTICE_PRIORITIES = Object.freeze(['normal', 'important', 'urgent']);
@@ -16,7 +17,10 @@ const attachmentSchema = new mongoose.Schema({
   displayName: { type: String, required: true, trim: true, maxlength: 180 },
   mimeType: { type: String, required: true, enum: ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'image/jpeg', 'image/png', 'image/webp'] },
   size: { type: Number, required: true, min: 1, max: 10 * 1024 * 1024 },
-  publicId: { type: String, required: true, trim: true, maxlength: 500, match: /^campusswap\/notices\// },
+  publicId: { type: String, required: true, trim: true, maxlength: 500, validate: {
+    validator: (value) => value.startsWith(assetFolder('notices') + '/'),
+    message: 'Invalid attachment publicId namespace'
+  } },
   resourceType: { type: String, required: true, enum: ['image', 'raw'] },
   secureUrl: { type: String, required: true, trim: true, maxlength: 2048, validate: { validator: safeHttps, message: 'Attachment URL must be safe HTTPS' } },
   kind: { type: String, required: true, enum: ['image', 'pdf', 'docx'] },

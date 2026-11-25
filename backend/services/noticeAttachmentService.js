@@ -5,8 +5,8 @@ import Notice from '../models/Notice.js';
 import { env } from '../config/env.js';
 import { BadRequest, ServiceUnavailable } from '../utils/AppError.js';
 import { NOTICE_ATTACHMENT_MAX_BYTES, NOTICE_ATTACHMENT_MAX_COUNT } from '../middleware/noticeAttachmentUploadMiddleware.js';
+import { assetFolder, makeScopedAssetId, matchesScopedUpload, ownsScopedAsset, usesScopedAssets } from '../utils/cloudinaryNamespace.js';
 
-export const NOTICE_FOLDER = 'campusswap/notices';
 const DOCX_MIME = 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const imageMimes = new Set(['image/jpeg', 'image/png', 'image/webp']);
 
@@ -17,6 +17,7 @@ const configure = () => {
 };
 const safeName = (value) => String(value || 'attachment').replace(/[\\/\0-\x1f\x7f]/g, '_').replace(/\s+/g, ' ').trim().slice(0, 180) || 'attachment';
 const startsWith = (buffer, bytes) => bytes.every((byte, index) => buffer[index] === byte);
+const attachmentExtension = (kind) => kind === 'pdf' ? '.pdf' : kind === 'docx' ? '.docx' : '';
 
 export const inspectNoticeAttachment = async (file) => {
   if (!file?.buffer?.length || !Number.isFinite(file.size) || file.size < 1) throw new BadRequest('Attachment is empty.');
@@ -45,7 +46,7 @@ export const inspectNoticeAttachment = async (file) => {
 };
 
 const uploadBuffer = (file, resourceType, publicId) => new Promise((resolve, reject) => {
-  const stream = cloudinary.uploader.upload_stream({ resource_type: resourceType, folder: NOTICE_FOLDER, public_id: publicId, overwrite: false, type: 'upload', timeout: 45_000 },
+  const stream = cloudinary.uploader.upload_stream({ resource_type: resourceType, ...(!usesScopedAssets() && { folder: assetFolder('notices') }), public_id: publicId, overwrite: false, type: 'upload', timeout: 45_000 },
     (error, result) => error ? reject(error) : resolve(result));
   stream.end(file.buffer);
 });
@@ -58,10 +59,12 @@ export const uploadNoticeAttachments = async ({ notice, files }) => {
   for (const file of files) {
     const inspected = await inspectNoticeAttachment(file);
     let result;
-    const extension = inspected.kind === 'pdf' ? '.pdf' : inspected.kind === 'docx' ? '.docx' : '';
-    try { result = await uploadBuffer(file, inspected.resourceType, `${notice._id}-${crypto.randomUUID()}${extension}`); }
+    const extension = attachmentExtension(inspected.kind);
+    const publicId = usesScopedAssets() ? makeScopedAssetId('notices', notice._id, extension) : notice._id + '-' + crypto.randomUUID() + extension;
+    try { result = await uploadBuffer(file, inspected.resourceType, publicId); }
     catch { throw new ServiceUnavailable('Attachment upload service is temporarily unavailable.'); }
-    if (!result?.secure_url?.startsWith('https://') || !result.public_id?.startsWith(`${NOTICE_FOLDER}/`)) throw new ServiceUnavailable('Attachment service returned an invalid response.');
+    const approvedId = usesScopedAssets() ? matchesScopedUpload(result, publicId) : result?.public_id?.startsWith(assetFolder('notices') + '/');
+    if (!result?.secure_url?.startsWith('https://') || !approvedId) throw new ServiceUnavailable('Attachment service returned an invalid response.');
     const metadata = {
       originalName: safeName(file.originalname), displayName: safeName(file.originalname), mimeType: inspected.mimeType,
       size: Number(result.bytes) || file.size, publicId: result.public_id, resourceType: inspected.resourceType,
@@ -78,7 +81,11 @@ export const removeNoticeAttachment = async ({ notice, attachmentId }) => {
   const attachment = notice.attachments.id(attachmentId);
   if (!attachment) throw new BadRequest('Attachment not found.');
   const metadata = attachment.toObject();
-  if (!metadata.publicId.startsWith(`${NOTICE_FOLDER}/`)) throw new BadRequest('Attachment ownership could not be verified.');
+  const extension = attachmentExtension(metadata.kind);
+  const approved = usesScopedAssets()
+    ? metadata.resourceType === (extension ? 'raw' : 'image') && ownsScopedAsset(metadata.publicId, 'notices', notice._id, extension)
+    : metadata.publicId.startsWith(assetFolder('notices') + '/');
+  if (!approved) throw new BadRequest('Attachment ownership could not be verified.');
   attachment.deleteOne();
   await notice.save();
   const shared = await Notice.exists({ _id: { $ne: notice._id }, 'attachments.publicId': metadata.publicId });

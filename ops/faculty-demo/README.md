@@ -21,14 +21,15 @@ EMAIL_PROVIDER=gmail
 GMAIL_USER=<dedicated Gmail sender>
 GMAIL_APP_PASSWORD=<Google App Password>
 EMAIL_FROM=<same Gmail sender address>
-CLOUDINARY_CLOUD_NAME=<isolated Free cloud name>
-CLOUDINARY_API_KEY=<isolated backend API key>
-CLOUDINARY_API_SECRET=<isolated backend API secret>
+CLOUDINARY_CLOUD_NAME=<approved Cloudinary cloud name>
+CLOUDINARY_ASSET_NAMESPACE=campusswap-faculty
+CLOUDINARY_API_KEY=<backend API key>
+CLOUDINARY_API_SECRET=<backend API secret>
 ~~~
 
 - Approve at least two real SATI student mailboxes if demonstrating peer chat. The administrator email is separate from the student allowlist.
 - Use a dedicated Gmail sender with 2-Step Verification and an App Password. The existing Nodemailer Gmail transport uses TLS on TCP 465. The demo security group currently permits outbound TCP 80, 443 and 27017. The credential-free probes confirmed TCP 465 and 587 were blocked. Add only outbound TCP 465 to this instance's existing security group under separate approval. In the state-owning Terraform stack, add 465 to the existing egress port map and review a plan with one security-group update and no other changes. Verify TLS and SMTP authentication before cutover. The HTTPS alternative is the existing Resend Free integration with a verified sending domain the operator already controls. The host reached its API and received the expected unauthenticated 401. Resend onboarding or test sending cannot deliver real OTPs to the faculty allowlist.
-- Use a separate unused Cloudinary Free product environment. If the existing Free account is already used for development, obtain a separate permitted Free environment under Cloudinary's terms. A folder or new key on the development cloud shares its asset boundary. Keep the three credentials backend-only. Enable PDF delivery in the isolated cloud only if required for public notice attachments. Use non-sensitive sample media and leave private evidence disabled.
+- Faculty deployments require the campusswap-faculty public-ID namespace. Uploads create unique non-overwriting IDs and the server checks the stored namespace and owner before deletion. This is application-level isolation within a shared Cloudinary environment. The credential retains its provider-side permissions. Keep it backend-only. Use non-sensitive media and leave private evidence disabled.
 
 ## After exact scope approval
 

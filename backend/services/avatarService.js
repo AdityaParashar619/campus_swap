@@ -3,8 +3,8 @@ import sharp from 'sharp';
 import { env } from '../config/env.js';
 import { BadRequest, ServiceUnavailable } from '../utils/AppError.js';
 import { AVATAR_MAX_SIZE_BYTES } from '../middleware/avatarUploadMiddleware.js';
+import { assetFolder, makeScopedAssetId, matchesScopedUpload, usesScopedAssets } from '../utils/cloudinaryNamespace.js';
 
-const AVATAR_FOLDER = 'campusswap/avatars';
 const allowedFormats = new Set(['jpeg', 'png', 'webp']);
 
 const configure = () => {
@@ -28,12 +28,16 @@ export const validateAvatar = async (file) => {
 export const uploadAvatar = async (file, userId) => {
   await validateAvatar(file);
   configure();
+  const scoped = usesScopedAssets();
+  const publicId = scoped ? makeScopedAssetId('avatars', userId) : 'user-' + userId;
   return new Promise((resolve, reject) => {
     const stream = cloudinary.uploader.upload_stream({
-      resource_type: 'image', folder: AVATAR_FOLDER, public_id: `user-${userId}`, overwrite: true,
-      invalidate: true, transformation: [{ width: 512, height: 512, crop: 'fill', gravity: 'face', quality: 'auto', fetch_format: 'auto' }]
+      resource_type: 'image', ...(!scoped && { folder: assetFolder('avatars'), invalidate: true }), public_id: publicId, overwrite: !scoped,
+      transformation: [{ width: 512, height: 512, crop: 'fill', gravity: 'face', quality: 'auto', fetch_format: 'auto' }]
     }, (error, result) => {
-      if (error || !result?.secure_url?.startsWith('https://')) return reject(new ServiceUnavailable('Profile image service is temporarily unavailable.'));
+      if (error || !result?.secure_url?.startsWith('https://') || (scoped && !matchesScopedUpload(result, publicId))) {
+        return reject(new ServiceUnavailable('Profile image service is temporarily unavailable.'));
+      }
       resolve(result.secure_url);
     });
     stream.end(file.buffer);

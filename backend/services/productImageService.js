@@ -4,8 +4,9 @@ import sharp from 'sharp';
 import { env } from '../config/env.js';
 import ProductImage from '../models/ProductImage.js';
 import { BadRequest, Forbidden, ServiceUnavailable } from '../utils/AppError.js';
+import { assetFolder, makeScopedAssetId, matchesScopedUpload, ownsScopedAsset, usesScopedAssets } from '../utils/cloudinaryNamespace.js';
 
-const PRODUCT_FOLDER = 'campusswap/products';
+const canModifyImage = (image) => !usesScopedAssets() || ownsScopedAsset(image.publicId, 'products', image.owner);
 const MIN_DIMENSION = 200;
 const MAX_DIMENSION = 12000;
 const MAX_PIXELS = 40_000_000;
@@ -44,7 +45,7 @@ export const inspectImage = async (file) => {
 const uploadBuffer = (buffer, publicId) => new Promise((resolve, reject) => {
   configureCloudinary();
   const stream = cloudinary.uploader.upload_stream({
-    resource_type: 'image', folder: PRODUCT_FOLDER, public_id: publicId, overwrite: false,
+    resource_type: 'image', ...(!usesScopedAssets() && { folder: assetFolder('products') }), public_id: publicId, overwrite: false,
     type: 'upload', timeout: 30_000
   }, (error, result) => error ? reject(error) : resolve(result));
   stream.end(buffer);
@@ -61,11 +62,12 @@ export const uploadProductFiles = async (files, ownerId) => {
         throw new BadRequest(`Each image must be ${env.productImageMaxSizeBytes / 1024 / 1024} MB or smaller.`);
       }
       const metadata = await inspectImage(file);
-      const publicId = `${ownerId}-${crypto.randomUUID()}`;
+      const publicId = usesScopedAssets() ? makeScopedAssetId('products', ownerId) : ownerId + '-' + crypto.randomUUID();
       let result;
       try { result = await uploadBuffer(file.buffer, publicId); }
       catch { throw uploadUnavailable('Image upload service is temporarily unavailable.'); }
-      if (!result?.secure_url?.startsWith('https://') || !result.public_id) throw uploadUnavailable('Image upload service returned an invalid response.');
+      if (!result?.secure_url?.startsWith('https://') || !result.public_id ||
+          (usesScopedAssets() && !matchesScopedUpload(result, publicId))) throw uploadUnavailable('Image upload service returned an invalid response.');
       const image = await ProductImage.create({
         secureUrl: result.secure_url, publicId: result.public_id, assetId: result.asset_id || '', owner: ownerId,
         format: metadata.format, width: metadata.width, height: metadata.height, bytes: result.bytes || file.size,
@@ -76,6 +78,7 @@ export const uploadProductFiles = async (files, ownerId) => {
     return created;
   } catch (error) {
     await Promise.allSettled(created.map(async (image) => {
+      if (!canModifyImage(image)) return;
       try { await cloudinary.uploader.destroy(image.publicId, { resource_type: 'image', type: 'upload', invalidate: true }); }
       finally { await ProductImage.deleteOne({ _id: image._id }); }
     }));
@@ -99,10 +102,11 @@ export const reserveListingImages = async ({ urls, ownerId, listingId, existingU
   for (const url of desired) {
     const record = byUrl.get(url);
     if (!record) {
-      if (!existingSet.has(url)) throw new BadRequest('One or more image references are not approved uploads.');
+      if (usesScopedAssets() || !existingSet.has(url)) throw new BadRequest('One or more image references are not approved uploads.');
       continue;
     }
     if (record.owner.toString() !== ownerId) throw new Forbidden('An image belongs to another user.');
+    if (!canModifyImage(record)) throw new Forbidden('Image cannot be modified in this environment.');
     if (record.status === 'pending' && record.expiresAt && record.expiresAt <= new Date()) throw new BadRequest('An image upload has expired.');
     if (record.status === 'attached' && record.listing?.toString() !== listingId.toString()) throw new BadRequest('An image is already attached to another listing.');
     if (record.status === 'cleanup_pending') throw new BadRequest('An image is pending removal.');
@@ -126,7 +130,7 @@ export const releaseReservedImages = (ids, ownerId, listingId) => ids.length ? P
 export const markRemovedImagesForCleanup = async ({ removedUrls, ownerId, listingId }) => {
   if (!removedUrls?.length) return [];
   const records = await ProductImage.find({ secureUrl: { $in: removedUrls }, owner: ownerId, listing: listingId, status: 'attached' });
-  const ids = records.map((record) => record._id);
+  const ids = records.filter(canModifyImage).map((record) => record._id);
   if (ids.length) await ProductImage.updateMany({ _id: { $in: ids } }, { $set: { status: 'cleanup_pending', expiresAt: new Date() } });
   return ids;
 };
@@ -137,6 +141,7 @@ export const cleanupProductImages = async (filter, limit = 20) => {
   const images = await ProductImage.find(filter).sort({ expiresAt: 1 }).limit(limit);
   let cleaned = 0; let failed = 0;
   for (const image of images) {
+    if (!canModifyImage(image)) { failed += 1; continue; }
     try {
       const result = await cloudinary.uploader.destroy(image.publicId, { resource_type: 'image', type: 'upload', invalidate: true });
       if (!['ok', 'not found'].includes(result?.result)) throw new Error('provider_rejected_cleanup');
@@ -151,7 +156,7 @@ export const cleanupProductImages = async (filter, limit = 20) => {
 
 export const reconcileDetachedProductImages = async () => {
   const records = await ProductImage.find({ status: 'attached' }).sort({ updatedAt: 1 }).limit(100).populate('listing', 'images');
-  const detachedIds = records.filter((record) => !record.listing || !record.listing.images?.includes(record.secureUrl)).map((record) => record._id);
+  const detachedIds = records.filter((record) => canModifyImage(record) && (!record.listing || !record.listing.images?.includes(record.secureUrl))).map((record) => record._id);
   if (detachedIds.length) await ProductImage.updateMany({ _id: { $in: detachedIds }, status: 'attached' }, { $set: { status: 'cleanup_pending', expiresAt: new Date() } });
   return detachedIds.length;
 };
@@ -165,7 +170,7 @@ export const cleanupExpiredProductImages = async () => {
 
 export const deleteOwnedPendingImage = async (imageId, ownerId) => {
   const image = await ProductImage.findOne({ _id: imageId, owner: ownerId, status: 'pending', listing: null });
-  if (!image) throw new Forbidden('Image cannot be removed.');
+  if (!image || !canModifyImage(image)) throw new Forbidden('Image cannot be removed.');
   image.status = 'cleanup_pending'; image.expiresAt = new Date(); await image.save();
   return cleanupProductImages({ _id: image._id }, 1);
 };
