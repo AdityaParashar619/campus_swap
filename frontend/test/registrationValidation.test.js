@@ -7,7 +7,7 @@ test('SATI student email validates structure and normalizes case and whitespace'
   for (const branch of ['cs', 'bc', 'ai', 'ds', 'it', 'iot', 'ec', 'ce', 'me', 'ee']) {
     assert.equal(isValidInstitutionalEmail(`student27${branch}025@satiengg.in`), true);
   }
-  assert.equal(normalizeInstitutionalEmail('  example27cs987@satiengg.in  '), 'example27cs987@satiengg.in');
+  assert.equal(normalizeInstitutionalEmail('  EXAMPLE27CS987@SATIENGG.IN  '), 'example27cs987@satiengg.in');
   for (const email of [
     'abc@gmail.com', 'student@gmail.com', 'aditya27cs011@gmail.com',
     'aditya27xx011@satiengg.in', 'aditya27cs1@satiengg.in',

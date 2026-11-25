@@ -15,7 +15,7 @@ export const authMiddleware = async (req, _res, next) => {
 
     if (!user) throw new Unauthorized('User not found');
     if (user.isBlocked || ['blocked', 'suspended'].includes(user.accountStatus)) throw new Forbidden('Account is unavailable');
-    if (decoded.tokenVersion !== undefined && decoded.tokenVersion !== (user.tokenVersion || 0)) throw new Unauthorized('Session revoked');
+    if ((decoded.tokenVersion ?? 0) !== (user.tokenVersion ?? 0)) throw new Unauthorized('Session revoked');
     if (user.accountStatus === 'pending') {
       throw new Forbidden('Account verification is pending');
     }

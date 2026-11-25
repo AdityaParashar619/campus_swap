@@ -144,7 +144,7 @@ export default function Network() {
             {loadError && <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700 dark:border-rose-900 dark:bg-rose-950/40 dark:text-rose-200">{loadError} <button type="button" className="font-bold underline" onClick={fetchNetwork}>Retry</button></div>}
 
             <div className="grid gap-5 lg:grid-cols-[1.15fr_0.85fr]">
-              <PremiumCard hover={false} className="border-slate-200/70 bg-white dark:border-slate-700/50 dark:bg-slate-900/90 shadow-md">
+              <PremiumCard data-network-layout="incoming-card" hover={false} className="border-slate-200/70 bg-white dark:border-slate-700/50 dark:bg-slate-900/90 shadow-md">
                 <div className="mb-5 flex items-center justify-between gap-3">
                   <div>
                     <h2 className="text-feature-title text-slate-950 dark:text-white">Incoming Requests</h2>
@@ -174,7 +174,7 @@ export default function Network() {
 
               <PremiumCard hover={false} className="border-slate-200/70 bg-white dark:border-slate-700/50 dark:bg-slate-900/90 shadow-md">
                 <h2 className="text-feature-title mb-4 text-slate-950 dark:text-white">Connection Status</h2>
-                <div className="grid grid-cols-3 gap-3">
+                <div data-network-layout="status-grid" className="grid grid-cols-3 gap-3">
                   {[
                     ['Connected', acceptedConnections.length],
                     ['Sent', pendingOutgoing.length],
@@ -207,7 +207,7 @@ export default function Network() {
                   <p className="text-body-sm">No trusted connections yet. Accept requests or connect with students below to unlock contact sharing and unlimited chat.</p>
                 </PremiumCard>
               ) : (
-                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                <div data-network-layout="trusted-grid" className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                   {acceptedConnections.map((connection) => {
                     const student = getOtherStudent(connection) || {};
                     return (
@@ -247,15 +247,15 @@ export default function Network() {
             </div>
 
             <div>
-              <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="text-feature-title">Discover Students</h2><p className="text-body-sm">Find students from the existing campus directory.</p></div><label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Search students<input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="form-control mt-1 sm:w-72" placeholder="Name, course, college" /></label></div>
+              <div data-network-layout="search-controls" className="mb-4 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between"><div><h2 className="text-feature-title">Discover Students</h2><p className="text-body-sm">Find students from the existing campus directory.</p></div><label className="text-sm font-semibold text-slate-700 dark:text-slate-200">Search students<input type="search" value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} className="form-control mt-1 sm:w-72" placeholder="Name, course, college" /></label></div>
               {loading ? (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div data-network-layout="discovery-skeletons" className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
                   {[1, 2, 3, 4, 5, 6].map((item) => <div key={item} className="skeleton h-44" />)}
                 </div>
               ) : (
-                <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div data-network-layout="discovery-grid" className="grid grid-cols-1 gap-5 md:grid-cols-2 lg:grid-cols-3">
                   {filteredStudents.map((student) => (
-                    <PremiumCard key={student._id} className="flex h-full flex-col justify-between border-slate-200/70 bg-white dark:border-slate-700/50 dark:bg-slate-900/90 shadow-md">
+                    <PremiumCard data-network-layout="discovery-card" key={student._id} className="flex h-full flex-col justify-between border-slate-200/70 bg-white dark:border-slate-700/50 dark:bg-slate-900/90 shadow-md">
                       <div>
                         <div className="mb-3 flex items-start justify-between gap-3">
                           <div className="flex min-w-0 items-center gap-3">
@@ -264,9 +264,9 @@ export default function Network() {
                           </div></div>
                           <span className="chip bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-slate-200">{student.trustScore || 0} trust</span>
                         </div>
-                        <p className="text-body-sm line-clamp-3 text-slate-700 dark:text-slate-300">{student.bio || 'No bio added yet.'}</p>
+                        <p data-network-layout="discovery-bio" className="text-body-sm line-clamp-3 [overflow-wrap:anywhere] text-slate-700 dark:text-slate-300">{student.bio || 'No bio added yet.'}</p>
                       </div>
-                      <div className="mt-5 flex items-center justify-between gap-3">
+                      <div data-network-layout="discovery-actions" className="mt-5 flex items-center justify-between gap-3">
                         <span className="text-xs text-slate-500 dark:text-slate-400">{student.collegeName || 'CampusSwap'}</span>
                         <div className="flex flex-wrap items-center justify-end gap-2"><Link to={`/students/${student._id}`} className="rounded-lg border border-slate-300 px-3 py-2 text-xs font-bold text-slate-700 dark:border-slate-600 dark:text-slate-200">Profile</Link>{renderConnectionAction(student)}</div>
                       </div>

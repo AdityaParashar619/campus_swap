@@ -1,10 +1,11 @@
-import { lazy, Suspense } from 'react';
-import { Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
+import { lazy, Suspense, useEffect, useState } from 'react';
+import { Link, Navigate, Route, BrowserRouter as Router, Routes } from 'react-router-dom';
 import { AuthProvider } from './context/AuthContext';
 import { ToastProvider } from './context/ToastContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { PageLoader } from './components/ui';
 import { useAuth } from './hooks/useAuth';
+import { authAPI } from './services/api';
 
 const Admin = lazy(() => import('./pages/Admin'));
 const AdminUsers = lazy(() => import('./pages/AdminUsers'));
@@ -61,6 +62,32 @@ const AdminRoute = ({ children, iam = false }) => {
   return children;
 };
 
+function EmailFlow({ children }) {
+  const [available, setAvailable] = useState(null);
+
+  useEffect(() => {
+    let active = true;
+    authAPI.capabilities().then(({ data }) => {
+      if (active) setAvailable(data.emailFlowsEnabled === true);
+    }).catch(() => {
+      if (active) setAvailable('unknown');
+    });
+    return () => { active = false; };
+  }, []);
+
+  if (available === null) return <PageLoader label="Checking account options…" />;
+  if (available === true) return children;
+  return (
+    <main className="mx-auto max-w-lg p-8">
+      <h1 className="text-2xl font-bold">Account options unavailable</h1>
+      <p className="my-4">{available === 'unknown'
+        ? 'CampusSwap could not check account options. Try again in a moment.'
+        : 'Registration and password reset are unavailable in the synthetic demo. Use your invited demo account.'}</p>
+      <Link to="/login" className="text-indigo-600 underline">Back to login</Link>
+    </main>
+  );
+}
+
 function AppContent() {
   return (
     <Router>
@@ -68,12 +95,12 @@ function AppContent() {
         <Routes>
           <Route path="/" element={<Landing />} />
           <Route path="/login" element={<Login />} />
-          <Route path="/signup" element={<Signup />} />
-          <Route path="/verify-email" element={<VerifyEmail />} />
-          <Route path="/verify-alumni" element={<VerifyAlumni />} />
+          <Route path="/signup" element={<EmailFlow><Signup /></EmailFlow>} />
+          <Route path="/verify-email" element={<EmailFlow><VerifyEmail /></EmailFlow>} />
+          <Route path="/verify-alumni" element={<EmailFlow><VerifyAlumni /></EmailFlow>} />
           <Route path="/account-status" element={<AccountStatus />} />
-          <Route path="/forgot-password" element={<ForgotPassword />} />
-          <Route path="/reset-password" element={<ResetPassword />} />
+          <Route path="/forgot-password" element={<EmailFlow><ForgotPassword /></EmailFlow>} />
+          <Route path="/reset-password" element={<EmailFlow><ResetPassword /></EmailFlow>} />
           <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
           <Route path="/listings" element={<ProtectedRoute><Listings /></ProtectedRoute>} />
           <Route path="/listings/:id" element={<ProtectedRoute><ListingDetails /></ProtectedRoute>} />

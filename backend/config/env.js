@@ -15,6 +15,8 @@ for (const key of requiredVars) {
 }
 
 const nodeEnv = process.env.NODE_ENV || 'development';
+const demoMode = process.env.CAMPUSSWAP_DEMO_MODE === 'true';
+const serveFrontend = process.env.SERVE_FRONTEND === 'true';
 const emailProvider = (process.env.EMAIL_PROVIDER || 'resend').trim().toLowerCase();
 const otpMockEnabled = process.env.OTP_MOCK_ENABLED === 'true';
 const resendApiKey = process.env.RESEND_API_KEY || '';
@@ -93,7 +95,13 @@ if (nodeEnv === 'production' && otpMockEnabled) {
 const senderAddress = emailFrom.match(/<([^<>]+)>/)?.[1] || emailFrom;
 const validSenderAddress = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(senderAddress) && !/[\r\n]/.test(emailFrom);
 const permittedResendTestRecipients = new Set(['delivered@resend.dev', 'bounced@resend.dev', 'complained@resend.dev']);
-if (!['gmail', 'resend'].includes(emailProvider)) throw new Error('EMAIL_PROVIDER must be either gmail or resend');
+if (demoMode && (nodeEnv !== 'production' || !serveFrontend || emailProvider !== 'disabled' ||
+    otpMockEnabled || resendTestMode || resendDomainVerified || resendApiKey || emailFrom || gmailUser || gmailAppPassword ||
+    cloudinaryCloudName || cloudinaryApiKey || cloudinaryApiSecret || pilotModeEnabled || adminBootstrapEnabled ||
+    process.env.SEED_ON_STARTUP === 'true' || process.env.CAMPUS_ISSUE_PRIVATE_EVIDENCE_ENABLED === 'true')) {
+  throw new Error('Restricted demo requires production same-origin mode without mail, media credentials, evidence, pilot, seed or bootstrap');
+}
+if (!(demoMode && emailProvider === 'disabled') && !['gmail', 'resend'].includes(emailProvider)) throw new Error('EMAIL_PROVIDER must be either gmail or resend');
 if (emailProvider === 'gmail') {
   if (!gmailUser || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(gmailUser) || !gmailAppPassword || gmailAppPassword.length < 16 || !validSenderAddress) {
     throw new Error('Gmail email delivery requires valid GMAIL_USER, a 16-character GMAIL_APP_PASSWORD, and a valid EMAIL_FROM');
@@ -121,6 +129,7 @@ if (nodeEnv === 'production') {
   try {
     const parsedMongoUri = new URL(mongoUri);
     const databaseName = parsedMongoUri.pathname.replace(/^\//, '').split('?')[0];
+    if (demoMode && !/^campusswap_demo(?:_[a-z0-9]+)?$/.test(databaseName)) throw new Error('unsafe demo target');
     if (!['mongodb:', 'mongodb+srv:'].includes(parsedMongoUri.protocol) || !databaseName || /(?:^|_)(?:test|staging)(?:_|$)/i.test(databaseName)) {
       throw new Error('unsafe MongoDB target');
     }
@@ -130,7 +139,7 @@ if (nodeEnv === 'production') {
   if (emailProvider === 'resend' && !resendDomainVerified) {
     throw new Error('Production Resend delivery requires RESEND_DOMAIN_VERIFIED=true after DNS verification');
   }
-  if (!cloudinaryCloudName || !cloudinaryApiKey || !cloudinaryApiSecret) {
+  if (!demoMode && (!cloudinaryCloudName || !cloudinaryApiKey || !cloudinaryApiSecret)) {
     throw new Error('Production requires complete backend-only Cloudinary credentials');
   }
   if (!process.env.OTP_PEPPER || otpPepper.length < 32 || otpPepper === process.env.JWT_SECRET) {
@@ -142,7 +151,7 @@ if (nodeEnv === 'production') {
   if (!configuredFrontendOrigins.length || configuredFrontendOrigins.some((origin) => {
     try {
       const parsed = new URL(origin);
-      return parsed.protocol !== 'https:' || parsed.pathname !== '/' || Boolean(parsed.search || parsed.hash || parsed.username || parsed.password);
+      return parsed.protocol !== 'https:' || parsed.origin !== origin;
     } catch { return true; }
   })) {
     throw new Error('Production FRONTEND_URL values must be valid HTTPS origins without paths or credentials');
@@ -163,6 +172,8 @@ try {
 
 export const env = {
   nodeEnv,
+  demoMode,
+  serveFrontend,
   port,
   mongoUri,
   jwtSecret: process.env.JWT_SECRET,

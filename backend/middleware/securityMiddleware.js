@@ -6,12 +6,21 @@ import crypto from 'node:crypto';
 import { env } from '../config/env.js';
 
 export const securityMiddleware = [
-  helmet(),
+  helmet(env.serveFrontend ? {
+    contentSecurityPolicy: {
+      directives: {
+        imgSrc: ["'self'", 'data:', 'blob:', 'https://res.cloudinary.com', 'https://tile.openstreetmap.org'],
+        frameSrc: ["'self'", 'https://res.cloudinary.com', 'https://drive.google.com', 'https://docs.google.com'],
+        connectSrc: ["'self'", ...env.frontendOrigins.map((origin) => origin.replace(/^https:/, 'wss:'))]
+      }
+    }
+  } : undefined),
   mongoSanitize(),
   hpp(),
   rateLimit({
     windowMs: env.rateLimitWindowMs,
     max: env.rateLimitMax,
+    skip: (req) => env.serveFrontend && ['GET', 'HEAD'].includes(req.method) && req.path.startsWith('/assets/'),
     standardHeaders: true,
     legacyHeaders: false,
     message: {

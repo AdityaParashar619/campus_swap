@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import { academicPrograms } from '../utils/academicPrograms.js';
+import { academicPrograms } from '../config/academicProgramData.js';
 
 export const NOTICE_CATEGORIES = Object.freeze(['academic', 'examination', 'placement', 'event', 'general']);
 export const NOTICE_PRIORITIES = Object.freeze(['normal', 'important', 'urgent']);

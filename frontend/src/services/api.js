@@ -66,6 +66,7 @@ API.interceptors.response.use(
 );
 
 export const authAPI = {
+  capabilities: () => API.get('/auth/capabilities'),
   register: (data) => API.post('/auth/register', data),
   registerStudent: (data) => API.post('/auth/register/student', data),
   registerAlumni: (data) => API.post('/auth/register/alumni', data),

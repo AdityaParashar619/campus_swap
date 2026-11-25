@@ -17,8 +17,8 @@ export const app = createApp();
 export const httpServer = createServer(app);
 const io = new Server(httpServer, { cors: corsOptions });
 io.use(socketAuthMiddleware);
-io.engine.on('connection_error', (error) => {
-  console.error(`Socket.IO connection failed: ${error.message}`);
+io.engine.on('connection_error', () => {
+  console.error('Socket.IO connection failed');
 });
 
 app.locals.io = io;
@@ -66,7 +66,7 @@ export const connectDatabaseInBackground = async () => {
     await ensureAdminUser();
     void cleanupExpiredProductImages().catch(() => console.error('Product image cleanup could not complete.'));
   } catch (error) {
-    console.error(`MongoDB connection failed: ${error.message}`);
+    console.error(env.nodeEnv === 'production' ? 'MongoDB startup checks failed; see index verification and readiness status.' : `MongoDB connection failed: ${error.message}`);
   } finally {
     connecting = false;
   }
@@ -81,7 +81,7 @@ export const startServer = () => {
     process.exitCode = 1;
   });
 
-  httpServer.listen(env.port, () => {
+  httpServer.listen(env.port, '0.0.0.0', () => {
     console.log(`Server running on port ${env.port}`);
     void connectDatabaseInBackground();
   });
@@ -94,25 +94,30 @@ export const startServer = () => {
   imageCleanupTimer.unref();
 
   let shuttingDown = false;
-  const shutdown = (signal) => {
+  const shutdown = async (signal) => {
     if (shuttingDown) return;
     shuttingDown = true;
     console.log(`Received ${signal}; shutting down`);
     clearInterval(retryTimer);
     clearInterval(imageCleanupTimer);
-    const closeHttpServer = () => httpServer.close(async (error) => {
-      try {
-        await mongoose.disconnect();
-      } catch (dbError) {
-        console.error(`Database shutdown failed: ${dbError.message}`);
-      }
-      if (error) {
-        console.error(`HTTP shutdown failed: ${error.message}`);
-        process.exitCode = 1;
-      }
-    });
-    if (httpServer.listening) io.close(closeHttpServer);
-    else void mongoose.disconnect();
+    // Socket.IO also owns the attached HTTP server's close.
+    try {
+      await io.close((error) => {
+        if (error && error.code !== 'ERR_SERVER_NOT_RUNNING') {
+          console.error('HTTP shutdown failed');
+          process.exitCode = 1;
+        }
+      });
+    } catch {
+      console.error('Socket.IO shutdown failed');
+      process.exitCode = 1;
+    }
+    try {
+      await mongoose.disconnect();
+    } catch {
+      console.error('Database shutdown failed');
+      process.exitCode = 1;
+    }
   };
 
   process.once('SIGTERM', () => shutdown('SIGTERM'));

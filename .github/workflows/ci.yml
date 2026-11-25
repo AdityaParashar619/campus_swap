@@ -9,17 +9,25 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   frontend:
-    runs-on: ubuntu-latest
+    name: Frontend tests and production build
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
     defaults:
       run:
         working-directory: frontend
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          node-version: 22
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
           cache: npm
           cache-dependency-path: frontend/package-lock.json
       - run: npm ci
@@ -27,41 +35,83 @@ jobs:
       - run: npm run build
 
   backend:
-    runs-on: ubuntu-latest
+    name: Backend tests and integrations
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
     services:
       mongodb:
         image: mongo:8
         ports:
-          - 27017:27017
+          - '127.0.0.1:27019:27017'
         options: >-
-          --health-cmd "mongosh --quiet --eval 'db.adminCommand(\"ping\").ok'"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-    defaults:
-      run:
-        working-directory: backend
+          --tmpfs /data/db --tmpfs /data/configdb
+          --health-cmd "mongosh --quiet --eval 'quit(db.adminCommand({ping:1}).ok === 1 ? 0 : 1)'"
+          --health-interval 2s --health-timeout 3s --health-retries 30
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          node-version: 22
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
           cache: npm
-          cache-dependency-path: backend/package-lock.json
-      - run: npm ci
-      - run: npm test
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - run: npm ci --prefix backend
+      - run: npm ci --prefix frontend
+      - name: Run all backend tests with isolated fixtures
+        run: node ops/run-ci-tests.mjs backend
         env:
-          JWT_SECRET: ci-only-test-secret
-          NODE_ENV: test
-          OTP_MOCK_ENABLED: 'true'
-          TEST_MONGO_URI: mongodb://127.0.0.1:27017/campusswap_ci_test
+          CI_TEST_MONGO_CONTAINER: ${{ job.services.mongodb.id }}
       - name: Run backend lint when configured
-        run: npm run lint --if-present
+        run: npm --prefix backend run lint --if-present
+
+  chromium:
+    name: Chromium end-to-end
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      mongodb:
+        image: mongo:8
+        ports:
+          - '127.0.0.1:27019:27017'
+        options: >-
+          --tmpfs /data/db --tmpfs /data/configdb
+          --health-cmd "mongosh --quiet --eval 'quit(db.adminCommand({ping:1}).ok === 1 ? 0 : 1)'"
+          --health-interval 2s --health-timeout 3s --health-retries 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: |
+            backend/package-lock.json
+            frontend/package-lock.json
+      - run: npm ci --prefix backend
+      - run: npm ci --prefix frontend
+      - name: Install Chromium and Linux dependencies
+        working-directory: frontend
+        run: npx --no-install playwright install --with-deps chromium
+      - name: Run Chromium against disposable CampusSwap
+        run: node ops/run-ci-tests.mjs chromium
+        env:
+          CI_TEST_MONGO_CONTAINER: ${{ job.services.mongodb.id }}
 
   deployment-config:
-    runs-on: ubuntu-latest
+    name: Production Compose validation
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
       - name: Validate merged production Compose configuration
         env:
           CAMPUS_ISSUE_PRIVATE_EVIDENCE_ENABLED: 'true'
@@ -73,8 +123,80 @@ jobs:
               const ports = services.frontend.ports;
               assert.equal(ports.length, 1);
               assert.equal(ports[0].host_ip, "127.0.0.1");
-              assert.equal(ports[0].target, 80);
+              assert.equal(ports[0].target, 8080);
               assert.equal(services.backend.ports?.length ?? 0, 0);
               assert.equal(services.mongodb.ports?.length ?? 0, 0);
               assert.equal(services.backend.environment.CAMPUS_ISSUE_PRIVATE_EVIDENCE_ENABLED, "false");
+              for (const service of Object.values(services)) {
+                assert.equal(service.privileged ?? false, false);
+                assert.equal(service.cap_add?.length ?? 0, 0);
+                assert.notEqual(service.network_mode, "host");
+                assert.ok(service.security_opt?.includes("no-new-privileges:true"));
+              }
             '
+
+  deployment-image:
+    name: Deployment image build and inspection
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Validate the restricted Render service
+        run: |
+          ruby -ryaml -e '
+            service, *other = YAML.safe_load_file("render.yaml").fetch("services")
+            expected = {
+              "type" => "web", "runtime" => "docker", "plan" => "free",
+              "dockerfilePath" => "./Dockerfile.same-origin", "dockerContext" => ".",
+              "healthCheckPath" => "/health", "autoDeployTrigger" => "off"
+            }
+            abort "Unexpected Render service settings" unless other.empty? && service.slice(*expected.keys) == expected
+            vars = service.fetch("envVars").to_h { |entry| [entry.fetch("key"), entry] }
+            defaults = {
+              "NODE_ENV" => "production", "SERVE_FRONTEND" => "true",
+              "CAMPUSSWAP_DEMO_MODE" => "true", "EMAIL_PROVIDER" => "disabled",
+              "OTP_MOCK_ENABLED" => "false", "CAMPUS_ISSUE_PRIVATE_EVIDENCE_ENABLED" => "false"
+            }
+            inputs = %w[MONGO_URI JWT_SECRET OTP_PEPPER FRONTEND_URL TRUST_PROXY_HOPS]
+            abort "Unexpected Render environment keys" unless vars.keys.sort == (defaults.keys + inputs).sort
+            defaults.each { |key, value| abort "Unexpected demo default" unless vars.fetch(key) == { "key" => key, "value" => value } }
+            inputs.each { |key| abort "Render must prompt for runtime inputs" unless vars.fetch(key) == { "key" => key, "sync" => false } }
+          '
+      - name: Build and inspect the same-origin image
+        id: production-image
+        run: bash ops/build-production-image.sh campusswap-ci:local
+      - name: Install checksum-pinned Trivy
+        id: trivy-install
+        run: bash ops/install-trivy.sh
+      - name: Cache Trivy vulnerability database
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: ${{ runner.temp }}/trivy-cache/db
+          key: trivy-db-0.76.2-${{ runner.os }}-${{ steps.trivy-install.outputs.cache-day }}
+          restore-keys: trivy-db-0.76.2-${{ runner.os }}-
+      - name: Scan publication files and Dockerfiles
+        run: node ops/scan-security.mjs repo "$RUNNER_TEMP/trivy-cache"
+      - name: Scan the inspected local production image
+        if: ${{ !cancelled() && steps.production-image.outcome == 'success' && steps.trivy-install.outcome == 'success' }}
+        env:
+          IMAGE_ID: ${{ steps.production-image.outputs.image-id }}
+        run: node ops/scan-security.mjs image "$RUNNER_TEMP/trivy-cache" "$IMAGE_ID"
+      - name: Build and check the separate Compose images
+        id: compose-images
+        if: ${{ !cancelled() && steps.trivy-install.outcome == 'success' }}
+        run: |
+          docker build --file backend/Dockerfile --tag campusswap-ci:backend backend
+          docker build --file frontend/Dockerfile --tag campusswap-ci:frontend frontend
+          test "$(docker image inspect --format '{{.Config.User}}' campusswap-ci:backend)" = node
+          test "$(docker image inspect --format '{{.Config.User}}' campusswap-ci:frontend)" = 101:101
+      - name: Scan the Compose backend image
+        if: ${{ !cancelled() && steps.compose-images.outcome == 'success' }}
+        run: node ops/scan-security.mjs compose-backend "$RUNNER_TEMP/trivy-cache" campusswap-ci:backend
+      - name: Scan the Compose frontend image
+        if: ${{ !cancelled() && steps.compose-images.outcome == 'success' }}
+        run: node ops/scan-security.mjs compose-frontend "$RUNNER_TEMP/trivy-cache" campusswap-ci:frontend

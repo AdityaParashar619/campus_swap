@@ -28,5 +28,5 @@ export const ensureAdminUser = async () => {
     isVerifiedStudent: true
   });
 
-  console.log(`Admin user created: ${email}`);
+  console.log('Administrator bootstrap completed');
 };

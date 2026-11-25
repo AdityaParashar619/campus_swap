@@ -32,19 +32,28 @@ const requireTrustedOrigin = (req, res, next) => {
 
 const router = express.Router();
 
-router.post('/register', authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, registerStudent);
-router.post('/register/student', authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, registerStudent);
-router.post('/register/alumni', authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, registerAlumni);
-router.post('/verify-alumni-email', authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, verifyAlumniEmail);
-router.post('/verify-email', authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, verifyStudentEmail);
-router.post('/resend-otp', authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, resendStudentOtp);
+const requireEmailFlows = (_req, res, next) => {
+  if (!env.demoMode) return next();
+  res.status(403).json({ success: false, message: 'Registration and password reset are unavailable in the synthetic demo. Use an invited demo account.' });
+};
+
+router.get('/capabilities', (_req, res) => {
+  res.set('Cache-Control', 'no-store').json({ emailFlowsEnabled: !env.demoMode });
+});
+
+router.post('/register', requireEmailFlows, authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, registerStudent);
+router.post('/register/student', requireEmailFlows, authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, registerStudent);
+router.post('/register/alumni', requireEmailFlows, authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, registerAlumni);
+router.post('/verify-alumni-email', requireEmailFlows, authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, verifyAlumniEmail);
+router.post('/verify-email', requireEmailFlows, authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, verifyStudentEmail);
+router.post('/resend-otp', requireEmailFlows, authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, resendStudentOtp);
 router.post('/login', authAttemptLimiter, validateBody(['email', 'password']), authAccountAttemptLimiter, validateAuthPayload('login'), login);
 router.post('/refresh', requireTrustedOrigin, refreshAttemptLimiter, refreshSession);
 router.post('/logout', requireTrustedOrigin, logout);
-router.post('/forgot-password', authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, forgotPassword);
-router.post('/verify-reset-otp', authAttemptLimiter, validateBody(['email', 'otp']), authAccountAttemptLimiter, verifyPasswordResetOtp);
-router.post('/reset-password', authAttemptLimiter, validatePasswordResetPayload, resetPassword);
-router.post('/dev-mail-preview', authAttemptLimiter, validateBody(['previewToken']), previewDevelopmentMail);
+router.post('/forgot-password', requireEmailFlows, authAttemptLimiter, validateBody(['email']), authAccountAttemptLimiter, forgotPassword);
+router.post('/verify-reset-otp', requireEmailFlows, authAttemptLimiter, validateBody(['email', 'otp']), authAccountAttemptLimiter, verifyPasswordResetOtp);
+router.post('/reset-password', requireEmailFlows, authAttemptLimiter, validatePasswordResetPayload, resetPassword);
+router.post('/dev-mail-preview', requireEmailFlows, authAttemptLimiter, validateBody(['previewToken']), previewDevelopmentMail);
 
 router.get('/users', authMiddleware, getAllUsers);
 router.get('/me', authMiddleware, getMe);
