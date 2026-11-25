@@ -58,10 +58,16 @@ export const connectDB = async () => {
       throw new Error('Database target validation failed');
     }
     await verifyDeploymentIndexes(database);
-    if (env.demoMode && await database.collection('users').findOne(
-      { email: { $not: /@demo\.invalid$/ } }, { projection: { _id: 1 } }
-    )) {
-      throw new Error('Demo database contains a non-synthetic identity');
+    if (env.demoMode) {
+      const unexpectedIdentity = env.facultyDemoMode
+        ? { $nor: [
+          { email: { $in: ['reviewer@demo.invalid', ...env.pilotAllowedEmails] }, role: 'student', accountType: 'student' },
+          { email: env.adminEmail, role: 'admin', accountType: 'staff' }
+        ] }
+        : { email: { $not: /@demo\.invalid$/ } };
+      if (await database.collection('users').findOne(unexpectedIdentity, { projection: { _id: 1 } })) {
+        throw new Error('Demo database contains an unauthorized identity');
+      }
     }
     if (mongoose.connection.readyState !== 1 || mongoose.connection.db !== database) {
       throw new Error('Database disconnected during index verification');

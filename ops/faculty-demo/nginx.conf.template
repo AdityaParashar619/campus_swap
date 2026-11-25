@@ -1,0 +1,51 @@
+map $http_upgrade $campusswap_connection {
+    default upgrade;
+    '' close;
+}
+
+server {
+    listen 80 default_server;
+    server_name _;
+
+    location ^~ /.well-known/acme-challenge/ {
+        root /var/www/acme;
+        try_files $uri =404;
+    }
+
+    location / { return 404; }
+}
+
+server {
+    listen 443 ssl default_server;
+    server_name __PUBLIC_IP__;
+
+    ssl_certificate /etc/letsencrypt/live/__PUBLIC_IP__/fullchain.pem;
+    ssl_certificate_key /etc/letsencrypt/live/__PUBLIC_IP__/privkey.pem;
+    ssl_protocols TLSv1.2 TLSv1.3;
+
+    if ($host != __PUBLIC_IP__) { return 421; }
+
+    proxy_http_version 1.1;
+    proxy_set_header Host $host;
+    proxy_set_header X-Forwarded-Host $host;
+    proxy_set_header X-Forwarded-For $remote_addr;
+    proxy_set_header X-Forwarded-Proto https;
+    proxy_set_header X-Forwarded-Port 443;
+    proxy_set_header Upgrade $http_upgrade;
+    proxy_set_header Connection $campusswap_connection;
+    proxy_read_timeout 75s;
+
+    location ~ ^/api/admin/notices/[^/]+/attachments/?$ {
+        client_max_body_size 52m;
+        proxy_pass http://127.0.0.1:8080;
+    }
+
+    location ~ ^/api/(listings/images|auth/me/avatar)/?$ {
+        client_max_body_size 26m;
+        proxy_pass http://127.0.0.1:8080;
+    }
+
+    location / {
+        proxy_pass http://127.0.0.1:8080;
+    }
+}
