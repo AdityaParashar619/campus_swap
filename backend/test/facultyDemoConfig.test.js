@@ -38,7 +38,8 @@ function readConfiguration(env) {
 test('restricted synthetic and explicitly configured faculty demos both start', () => {
   for (const [env, expected] of [
     [{ ...base, EMAIL_PROVIDER: 'disabled' }, [true, false]],
-    [faculty, [true, true]]
+    [faculty, [true, true]],
+    [{ ...faculty, PILOT_MODE_ENABLED: 'false', PILOT_ALLOWED_EMAILS: '' }, [true, true]]
   ]) {
     const result = readConfiguration(env);
     assert.equal(result.status, 0, result.stderr);
@@ -50,7 +51,7 @@ test('faculty configuration rejects unsafe targets, identities, and switches', a
   for (const [key, value] of [
     ['CAMPUSSWAP_DEMO_MODE', 'false'],
     ['MONGO_URI', 'mongodb://localhost:27017/campusswap'],
-    ['PILOT_MODE_ENABLED', 'false'],
+    ['PILOT_ALLOWED_EMAILS', ''],
     ['PILOT_ALLOWED_EMAILS', 'someone@example.com'],
     ['ADMIN_EMAIL', 'student27cs011@satiengg.in'],
     ['ADMIN_PASSWORD', 'fixture-only'],

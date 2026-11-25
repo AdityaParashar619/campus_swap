@@ -32,6 +32,8 @@ const [{ default: mongoose }, { createApp }, { default: User }, { default: Email
   import('../models/EnrollmentReservation.js'),
   import('../models/RefreshSession.js')
 ]);
+const { env } = await import('../config/env.js');
+const { facultyUnexpectedIdentityFilter } = await import('../utils/institutionalIdentity.js');
 const { consumeDevelopmentMail } = await import('../utils/devMailCapture.js');
 const { authAttemptLimiter } = await import('../middleware/securityMiddleware.js');
 
@@ -57,6 +59,9 @@ test('Mongo-backed student registration, verification, login, refresh, logout, r
     server.once('error', reject);
     server.listen(0, '127.0.0.1', resolve);
   });
+  const originalFacultyConfig = { facultyDemoMode: env.facultyDemoMode, adminEmail: env.adminEmail, pilotModeEnabled: env.pilotModeEnabled, pilotAllowedEmails: env.pilotAllowedEmails };
+  const facultyAdminEmail = 'faculty' + suffix + '27cs021@satiengg.in';
+  Object.assign(env, { facultyDemoMode: true, adminEmail: facultyAdminEmail, pilotModeEnabled: false, pilotAllowedEmails: ['former27cs777@satiengg.in'] });
   const apiUrl = `http://127.0.0.1:${server.address().port}/api/auth`;
   let ownedUserId;
   let ownedAdminId;
@@ -77,6 +82,14 @@ test('Mongo-backed student registration, verification, login, refresh, logout, r
     assert.equal(await User.exists({ $or: [{ email }, { enrollmentNumber }] }), null, 'randomized test fixture must not already exist');
     assert.equal(await EmailVerification.exists({ email }), null);
     assert.equal(await EnrollmentReservation.exists({ email }), null);
+    const register = (body) => fetch(apiUrl + '/register/student', {
+      method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
+    });
+    assert.equal((await register({ email: 'student@example.invalid' })).status, 400);
+    assert.equal((await register({ email: 'malformed@satiengg.in' })).status, 400);
+    assert.equal((await register({ email: facultyAdminEmail.toUpperCase() })).status, 403);
+    assert.equal(await EmailVerification.exists({ email: facultyAdminEmail }), null);
+    resetAuthAttemptIpLimit();
     const registration = await fetch(`${apiUrl}/register/student`, {
       method: 'POST',
       headers: { 'content-type': 'application/json' },
@@ -205,14 +218,26 @@ test('Mongo-backed student registration, verification, login, refresh, logout, r
     });
     assert.equal(forbiddenAdminApi.status, 403);
 
-    const adminEmail = `admin-${crypto.randomBytes(8).toString('hex')}@satiengg.in`;
+    const adminEmail = facultyAdminEmail;
+    const adminEnrollment = '0108cs7710' + roll;
     ownedAdminEmail = adminEmail;
     const admin = await User.create({
-      name: 'Integration Administrator', email: adminEmail, enrollmentNumber: `ADMIN-${crypto.randomBytes(8).toString('hex')}`,
+      name: 'Integration Administrator', email: adminEmail, enrollmentNumber: adminEnrollment,
+      branch: 'cs', department: 'CSE', semester: '7', yearSemester: '7', contactVisibility: 'private',
       password: await bcrypt.hash('Integration-admin-password-456', 12), role: 'admin', accountType: 'staff',
       accountStatus: 'active', emailVerified: true, verificationStatus: 'verified'
     });
     ownedAdminId = admin._id;
+    assert.equal(await User.countDocuments({ $and: [facultyUnexpectedIdentityFilter(), { _id: { $in: [ownedUserId, ownedAdminId] } }] }), 0);
+    resetAuthAttemptIpLimit();
+    const enrollmentConflict = await register({
+      name: 'Enrollment Conflict Fixture', email: 'conflict' + suffix + '27cs031@satiengg.in',
+      enrollmentNumber: adminEnrollment.toUpperCase(), department: 'CSE', branch: 'cs', semester: '7',
+      phoneNumber: '1234567890', password: 'Fixture-test-password-123', confirmPassword: 'Fixture-test-password-123'
+    });
+    assert.equal(enrollmentConflict.status, 409);
+    assert.match((await enrollmentConflict.json()).message, /enrollment number is already registered/i);
+    resetAuthAttemptIpLimit();
 
     const adminForgot = await fetch(`${apiUrl}/forgot-password`, {
       method: 'POST', headers: { 'content-type': 'application/json' },
@@ -306,6 +331,7 @@ test('Mongo-backed student registration, verification, login, refresh, logout, r
     assert.ok(concurrentUser);
     ownedConcurrentId = concurrentUser._id;
   } finally {
+    Object.assign(env, originalFacultyConfig);
     await Promise.all([
       ...(ownedUserId ? [User.deleteOne({ _id: ownedUserId }), RefreshSession.deleteMany({ user: ownedUserId })] : []),
       ...(ownedAdminId ? [User.deleteOne({ _id: ownedAdminId }), RefreshSession.deleteMany({ user: ownedAdminId })] : []),
