@@ -6,15 +6,19 @@ CampusSwap ships one same-origin `linux/amd64` image from `Dockerfile.same-origi
 
 An image is a versioned application filesystem plus runtime configuration. A container is a running instance with its own process and writable layer. GitHub hosts the Git repository and review history. GHCR stores container configuration, manifests and layers that Docker can pull.
 
-The canonical repository is `AdityaParashar619/campus_swap`. The proposed image is `ghcr.io/adityaparashar619/campusswap`, using the owner's lowercase registry namespace. GitHub defaults a new container package to private even when the repository is public. Keep the first authorized package private for package association, layer inspection and access checks. After a separately approved public release review, public visibility would let faculty and portfolio reviewers pull anonymously. A public package can expose every available version and its layers, and GitHub does not allow changing a public package back to private. [GHCR authentication and visibility](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) · [Package access controls](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility)
+The canonical repository is `AdityaParashar619/campus_swap`. The public portfolio image is `ghcr.io/adityaparashar619/campusswap`. It supports credential-free pulls. Public visibility exposes available versions and their layers. GitHub does not support returning a public package to private visibility. [GHCR documentation](https://docs.github.com/en/packages/working-with-a-github-packages-registry/working-with-the-container-registry) · [Package access controls](https://docs.github.com/en/packages/learn-github-packages/configuring-a-packages-access-control-and-visibility)
 
-GitHub currently lists GHCR container image storage and bandwidth as free. Standard runners are free for this public repository. The workflow creates no paid resources or deployment service. Check the current terms before the first authorized publication and again if the package grows or the terms change. [GitHub Packages billing](https://docs.github.com/en/billing/concepts/product-billing/github-packages) · [GitHub Actions billing](https://docs.github.com/en/actions/concepts/billing-and-usage)
+GitHub currently lists GHCR image storage and bandwidth as free. Standard runners are free for this public repository. Recheck terms before future releases. [GitHub Packages billing](https://docs.github.com/en/billing/concepts/product-billing/github-packages) · [GitHub Actions billing](https://docs.github.com/en/actions/concepts/billing-and-usage)
+
+## Visibility incident closure
+
+The owner approved retaining `ghcr.io/adityaparashar619/campusswap@sha256:98d289492c2557053c001f23300b66bf7b71010604d06562455ad0905f62ad82` as an intentionally public artifact. The first release was expected to be private. Review of the exact manifest, configuration, and seven image layers identified no sensitive application data. GitHub's initial visibility decision remains unconfirmed. Closure applies to this digest. Each future dispatch requires its own public-distribution approval. [Original release](https://github.com/AdityaParashar619/campus_swap/actions/runs/45570186380)
 
 ## What the workflow does
 
 | Workflow line or step | What it means |
 | --- | --- |
-| `workflow_dispatch` and required `commit_sha` | A maintainer explicitly runs the workflow and gives the reviewed full SHA. An ordinary PR or push cannot publish. GitHub must first have this workflow on the default branch. |
+| `workflow_dispatch`, `commit_sha` and `confirm_public_distribution` | A maintainer dispatches from `main` with the reviewed full SHA and explicitly sets public approval to true. Approval defaults to false and is checked before the publication job starts. |
 | Canonical repository and `refs/heads/main` guards | A copied workflow on a fork, a branch dispatch or a tag dispatch cannot run the release jobs. Main is the trusted code and workflow boundary. |
 | `permissions: {}` | Start with an empty token permission set. |
 | `verify-source` | Give the job `actions: read` and `contents: read` for the API checks. The SHA must equal the dispatch SHA and the current main tip. Query the newest CI push run for that SHA and require the expected five jobs to succeed. A PR merge-ref check cannot stand in for a main push check. |
@@ -24,7 +28,7 @@ GitHub currently lists GHCR container image storage and bandwidth as free. Stand
 | `install-trivy.sh` and scan step | Both workflows use the same pinned Trivy archive, checksum and policy. The release scan takes the local image ID, updates the vulnerability database and fails closed. It emits no raw reports. |
 | Isolated smoke test | Start tmpfs MongoDB and the exact scanned image on an internal network with synthetic runtime settings. Verify liveness, readiness, SPA assets and restricted demo mode. Cleanup is scoped to those resources. |
 | Registry step | Only this step receives the job's `GITHUB_TOKEN` for registry use. Docker reads it on standard input and stores credentials in a temporary Docker config. The resulting package is associated with the source workflow repository. |
-| Digest verification | Tag the validated local ID with the source SHA. After pushing, match the remote manifest's config digest to the config hash taken from the inspected image archive and check that the tag resolves to the digest returned by the push. The run summary records the immutable reference. No second build occurs. |
+| Digest and visibility verification | After the push, check the manifest's config hash and the tag-to-digest mapping. Fetch the exact digest using anonymous registry access and verify its bytes. The summary records the digest and observed public visibility. An inconclusive probe records `unverified` and fails the run. The image may already exist in that case. |
 
 The ordinary five-job CI workflow stays read-only and verifies the source revision. The release job may produce a different image from CI even for the same commit because base package repositories and build metadata can change. Its own inspection, scan and runtime smoke test are the artifact-level gates. No raw scan report or SBOM is uploaded. [Workflow dispatch behavior](https://docs.github.com/en/actions/how-tos/manage-workflow-runs/manually-run-a-workflow) · [GitHub workflow runs API](https://docs.github.com/en/rest/actions/workflow-runs#list-workflow-runs-for-a-workflow)
 
@@ -34,36 +38,40 @@ OCI metadata exposes the public source URL and full commit SHA as the revision a
 
 The full commit SHA **tag** provides readable traceability. Tags are registry pointers and can technically be reassigned. A **local image ID** identifies the image in the Docker daemon. The **config digest** hashes the image configuration, including its layer content identities. A **registry manifest digest** hashes the published manifest that references the configuration and compressed layer blobs. The Docker image store can report a local ID different from the config digest, so the workflow records and checks them separately. Use the registry-reported manifest digest for deployments. [Docker image digests](https://docs.docker.com/dhi/explore/security-concepts/digests)
 
-After separately authorized publication, use these commands from a Bash shell. For a private package the Docker client must already have approved read access. The workflow creates no personal access token or long-lived registry credential.
+Use this minimal Compose service on a prepared host. The external `campusswap-demo` Docker network connects the app to its isolated demo MongoDB service. MongoDB has no published port. Keep the runtime file operator-owned and outside Git. Use the demo environment template, a dedicated MongoDB URI, an exact HTTPS frontend origin, and independent JWT and OTP secrets. Provision indexes and a synthetic account only on the new demo database before first app startup.
 
-```sh
-image=ghcr.io/adityaparashar619/campusswap
-: "${COMMIT_SHA:?Set the approved full commit SHA}"
-: "${RELEASE_DIGEST:?Set the sha256 manifest digest from the release summary}"
-
-docker pull "$image:$COMMIT_SHA"
-docker pull "$image@$RELEASE_DIGEST"
-docker buildx imagetools inspect "$image@$RELEASE_DIGEST"
-docker image inspect --format '{{json .Config.Labels}}' "$image@$RELEASE_DIGEST"
-docker run --rm --name campusswap --env-file /protected/campusswap.env \
-  -p 127.0.0.1:8080:5000 "$image@$RELEASE_DIGEST"
+```yaml
+services:
+  app:
+    image: ${CAMPUSSWAP_IMAGE:?Set the approved digest reference}
+    env_file: /opt/campusswap/runtime.env
+    ports: ["127.0.0.1:8080:5000"]
+    restart: unless-stopped
+    networks: [demo]
+networks:
+  demo:
+    external: true
+    name: campusswap-demo
 ```
 
-The runtime environment file sits outside Git and the image. For a demo, set the same-origin production variables documented in the template, including a dedicated MongoDB URI, HTTPS frontend origin and independent signing and OTP secrets. Provision the required indexes on the intended isolated deployment database before first startup. For rollback, record each successfully released manifest digest in the release log. Retrieve the previous known-good digest, verify it still exists using `imagetools inspect`, and use it as `RELEASE_DIGEST` with the same approved runtime configuration. Verify database compatibility before switching images.
-
-## Local rehearsal
-
-Use a clean publication worktree and a checksum-verified Trivy binary on PATH. The build helper uses the checked-out committed application tree. During review, the current local helper and inspector can still be exercised before committing the workflow files.
+Record the current known-good digest before replacing the app. Run from the directory containing the prepared Compose file.
 
 ```sh
-audit_dir="$(mktemp -d)"
-bash ops/build-production-image.sh campusswap-release:local
-id="$(docker image inspect --format '{{.Id}}' campusswap-release:local)"
-node ops/scan-security.mjs image "$audit_dir/trivy-cache" "$id"
-actionlint .github/workflows/ci.yml .github/workflows/publish-ghcr.yml
-git diff --check
+export CAMPUSSWAP_IMAGE=ghcr.io/adityaparashar619/campusswap@sha256:98d289492c2557053c001f23300b66bf7b71010604d06562455ad0905f62ad82
+docker compose pull app
+docker compose up -d --no-deps --force-recreate app
+curl --fail --retry 15 --retry-connrefused http://127.0.0.1:8080/health
+curl --fail http://127.0.0.1:8080/live
 ```
 
-The local rehearsal built and inspected seven layers and 160 application files from the reviewed source commit. The image passed Trivy 0.76.2 with zero CRITICAL, HIGH or secret findings, seven MEDIUM findings and four LOW findings. Its isolated runtime passed after provisioning all 49 indexes in disposable MongoDB. The archive's config hash matched the Buildx configuration digest. Offline fixtures exercised the actual source and registry workflow steps. Each accepted its valid case and rejected stale or failed CI, incorrect source, local image drift, and failed or mismatched registry responses as applicable. A separate invalid database cache exercise confirmed that the Trivy gate failed closed.
+Confirm that the app serves the frontend and that synthetic login works through the intended HTTPS ingress. For an actual rollback, verify database compatibility with the prior release, set `CAMPUSSWAP_IMAGE` to its recorded manifest digest, and repeat the app-only replacement and checks. Keep the database and runtime configuration in place. Recreating or restarting the same digest tests service recovery. Switching to a different known-good digest tests release rollback. This is the first approved image, so cross-release rollback remains untested.
 
-The proposed workflow still needs a separately approved main merge and successful main CI before its first hosted dispatch. The first authorized run must verify GitHub token write access, package association and visibility, GHCR's returned manifest digest and anonymous access behavior after any later visibility change.
+The local rehearsal pulled this digest anonymously and ran it with tmpfs MongoDB on an internal network. It provisioned all 49 indexes and passed liveness, readiness, SPA serving, invite-only login, protected profile access and refresh rotation before and after restart. A database network interruption returned readiness 503 while liveness stayed 200. Readiness and login recovered after reconnecting. The disposable containers and network were removed.
+
+## Next AWS step
+
+1. Verify the current AWS Free plan, remaining credits and expiration. Inventory existing instances, volumes and addresses in `us-east-1` before planning anything new. Check instance, EBS, IPv4 and transfer costs against the actual account.
+2. Prepare one Terraform plan for an eligible **x86-64** EC2 instance, an encrypted root volume and one security group in a verified existing subnet. Start with operator-restricted SSH and keep the app on loopback. Add HTTPS ingress through the existing Nginx approach once a suitable hostname and certificate are available. Keep MongoDB on the host's private Docker network using a dedicated demo database and volume.
+3. Review the saved plan and resource costs before approving an apply. Keep credentials out of Terraform state, user data and the repository. Install Docker and pull the approved public digest without a registry credential. Use the app-only procedure above and separately approve teardown of any resources created for the demo.
+
+This plan uses one host and the existing tools. It requires no NAT gateway, managed load balancer, new registry, or paid account upgrade. [AWS Free plan terms](https://aws.amazon.com/free/free-tier-faqs/) · [EC2 eligibility](https://docs.aws.amazon.com/AWSEC2/latest/UserGuide/ec2-free-tier-usage.html)

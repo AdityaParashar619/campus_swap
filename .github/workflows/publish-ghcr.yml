@@ -7,6 +7,11 @@ on:
         description: Full SHA of the reviewed main commit with successful CI
         required: true
         type: string
+      confirm_public_distribution:
+        description: Approve public distribution of the image for this exact commit
+        required: true
+        type: boolean
+        default: false
 
 permissions: {}
 
@@ -28,8 +33,11 @@ jobs:
         shell: bash
         env:
           REQUESTED_SHA: ${{ inputs.commit_sha }}
+          PUBLIC_APPROVED: ${{ inputs.confirm_public_distribution }}
           GH_TOKEN: ${{ github.token }}
         run: |
+          [[ "$PUBLIC_APPROVED" == true ]] ||
+            { echo 'Explicit approval for public distribution is required.' >&2; exit 1; }
           [[ "$REQUESTED_SHA" =~ ^[a-f0-9]{40}$ && "$REQUESTED_SHA" == "$GITHUB_SHA" ]] ||
             { echo 'Supply the full SHA of the dispatched main commit.' >&2; exit 1; }
           main_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
@@ -161,5 +169,22 @@ jobs:
             .schemaVersion == 2 and .config.digest == $config and (.layers | type == "array" and length > 0)
           ' >/dev/null
           test "$(docker --config "$auth" buildx imagetools inspect --format '{{.Manifest.Digest}}' "$ref")" = "$digest"
-          printf 'Published image: `%s@%s`\n\nSource tag: `%s`\n' "$image" "$digest" "$ref" >> "$GITHUB_STEP_SUMMARY"
+
+          # Verify what a client with no GitHub or Docker credentials can read.
+          visibility=unverified
+          if anonymous_token=$(curl --disable --fail --silent --show-error --max-time 30 --get 'https://ghcr.io/token' \
+              --data-urlencode 'service=ghcr.io' --data-urlencode "scope=repository:${image#ghcr.io/}:pull" |
+              jq -er '.token | strings | select(length > 0)') &&
+            manifest_hash=$(curl --disable --fail --silent --show-error --max-time 30 \
+              -H "Authorization: Bearer $anonymous_token" \
+              -H 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+              "https://ghcr.io/v2/${image#ghcr.io/}/manifests/$digest" | sha256sum | cut -d ' ' -f1) &&
+            [[ "sha256:$manifest_hash" == "$digest" ]]; then
+            visibility=public
+          fi
+          unset anonymous_token
+          printf 'Published image: `%s@%s`\n\nSource tag: `%s`\n\nObserved package visibility: **%s**\n' \
+            "$image" "$digest" "$ref" "$visibility" >> "$GITHUB_STEP_SUMMARY"
+          [[ "$visibility" == public ]] ||
+            { echo 'The image was pushed, but public access to the exact digest could not be verified.' >&2; exit 1; }
           printf 'Published %s@%s\n' "$image" "$digest"
