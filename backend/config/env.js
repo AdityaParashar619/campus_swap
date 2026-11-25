@@ -16,6 +16,7 @@ for (const key of requiredVars) {
 
 const nodeEnv = process.env.NODE_ENV || 'development';
 const demoMode = process.env.CAMPUSSWAP_DEMO_MODE === 'true';
+const facultyDemoMode = process.env.CAMPUSSWAP_FACULTY_DEMO_MODE === 'true';
 const serveFrontend = process.env.SERVE_FRONTEND === 'true';
 const emailProvider = (process.env.EMAIL_PROVIDER || 'resend').trim().toLowerCase();
 const otpMockEnabled = process.env.OTP_MOCK_ENABLED === 'true';
@@ -39,7 +40,8 @@ const SATI_SUPPORTED_BRANCHES = new Set(['cs', 'bc', 'ai', 'ds', 'it', 'iot', 'e
 const otpTtlMinutes = Number(process.env.OTP_TTL_MINUTES || 5);
 const otpMaxAttempts = Number(process.env.OTP_MAX_ATTEMPTS || 5);
 const otpResendCooldownSeconds = Number(process.env.OTP_RESEND_COOLDOWN_SECONDS || 60);
-const adminEmail = process.env.ADMIN_EMAIL || '';
+const configuredAdminEmail = process.env.ADMIN_EMAIL || '';
+const adminEmail = facultyDemoMode ? configuredAdminEmail.trim().toLowerCase() : configuredAdminEmail;
 const adminPassword = process.env.ADMIN_PASSWORD || '';
 const superAdminEmail = process.env.SUPER_ADMIN_EMAIL || '';
 const superAdminPassword = process.env.SUPER_ADMIN_PASSWORD || '';
@@ -95,13 +97,23 @@ if (nodeEnv === 'production' && otpMockEnabled) {
 const senderAddress = emailFrom.match(/<([^<>]+)>/)?.[1] || emailFrom;
 const validSenderAddress = /^[^\s@<>]+@[^\s@<>]+\.[^\s@<>]+$/.test(senderAddress) && !/[\r\n]/.test(emailFrom);
 const permittedResendTestRecipients = new Set(['delivered@resend.dev', 'bounced@resend.dev', 'complained@resend.dev']);
-if (demoMode && (nodeEnv !== 'production' || !serveFrontend || emailProvider !== 'disabled' ||
-    otpMockEnabled || resendTestMode || resendDomainVerified || resendApiKey || emailFrom || gmailUser || gmailAppPassword ||
-    cloudinaryCloudName || cloudinaryApiKey || cloudinaryApiSecret || pilotModeEnabled || adminBootstrapEnabled ||
-    process.env.SEED_ON_STARTUP === 'true' || process.env.CAMPUS_ISSUE_PRIVATE_EVIDENCE_ENABLED === 'true')) {
-  throw new Error('Restricted demo requires production same-origin mode without mail, media credentials, evidence, pilot, seed or bootstrap');
+if (facultyDemoMode && !demoMode) {
+  throw new Error('Faculty demonstration requires CAMPUSSWAP_DEMO_MODE=true');
 }
-if (!(demoMode && emailProvider === 'disabled') && !['gmail', 'resend'].includes(emailProvider)) throw new Error('EMAIL_PROVIDER must be either gmail or resend');
+if (demoMode && (nodeEnv !== 'production' || !serveFrontend || otpMockEnabled || resendTestMode || adminBootstrapEnabled ||
+    process.env.SEED_ON_STARTUP === 'true' || process.env.CAMPUS_ISSUE_PRIVATE_EVIDENCE_ENABLED === 'true')) {
+  throw new Error('Demo deployment requires production same-origin mode without mock mail, evidence, seed or bootstrap');
+}
+const syntheticDemoMode = demoMode && !facultyDemoMode;
+if (syntheticDemoMode && (emailProvider !== 'disabled' || resendDomainVerified || resendApiKey || emailFrom || gmailUser || gmailAppPassword ||
+    cloudinaryCloudName || cloudinaryApiKey || cloudinaryApiSecret || pilotModeEnabled)) {
+  throw new Error('Synthetic demo requires disabled mail, media and pilot registration');
+}
+if (facultyDemoMode && (!pilotModeEnabled || !/^[a-z0-9._%+-]+@satiengg\.in$/.test(adminEmail) ||
+    pilotAllowedEmails.includes(adminEmail) || adminPassword || superAdminEmail || superAdminPassword)) {
+  throw new Error('Faculty demonstration requires a student allowlist and separate SATI administrator email, with no bootstrap credentials');
+}
+if (!syntheticDemoMode && !['gmail', 'resend'].includes(emailProvider)) throw new Error('EMAIL_PROVIDER must be either gmail or resend');
 if (emailProvider === 'gmail') {
   if (!gmailUser || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(gmailUser) || !gmailAppPassword || gmailAppPassword.length < 16 || !validSenderAddress) {
     throw new Error('Gmail email delivery requires valid GMAIL_USER, a 16-character GMAIL_APP_PASSWORD, and a valid EMAIL_FROM');
@@ -129,7 +141,8 @@ if (nodeEnv === 'production') {
   try {
     const parsedMongoUri = new URL(mongoUri);
     const databaseName = parsedMongoUri.pathname.replace(/^\//, '').split('?')[0];
-    if (demoMode && !/^campusswap_demo(?:_[a-z0-9]+)?$/.test(databaseName)) throw new Error('unsafe demo target');
+    if (facultyDemoMode && databaseName !== 'campusswap_demo') throw new Error('unsafe faculty demo target');
+    if (syntheticDemoMode && !/^campusswap_demo(?:_[a-z0-9]+)?$/.test(databaseName)) throw new Error('unsafe demo target');
     if (!['mongodb:', 'mongodb+srv:'].includes(parsedMongoUri.protocol) || !databaseName || /(?:^|_)(?:test|staging)(?:_|$)/i.test(databaseName)) {
       throw new Error('unsafe MongoDB target');
     }
@@ -139,7 +152,7 @@ if (nodeEnv === 'production') {
   if (emailProvider === 'resend' && !resendDomainVerified) {
     throw new Error('Production Resend delivery requires RESEND_DOMAIN_VERIFIED=true after DNS verification');
   }
-  if (!demoMode && (!cloudinaryCloudName || !cloudinaryApiKey || !cloudinaryApiSecret)) {
+  if (!syntheticDemoMode && (!cloudinaryCloudName || !cloudinaryApiKey || !cloudinaryApiSecret)) {
     throw new Error('Production requires complete backend-only Cloudinary credentials');
   }
   if (!process.env.OTP_PEPPER || otpPepper.length < 32 || otpPepper === process.env.JWT_SECRET) {
@@ -169,10 +182,19 @@ try {
 } catch {
   throw new Error('INSTITUTION_EMAIL_PATTERN and ENROLLMENT_PATTERN must be valid, non-stateful regular expressions matching the SATI identity formats');
 }
+if (facultyDemoMode) {
+  const branchPattern = institutionBranches.join('|');
+  const studentEmail = new RegExp('^[a-z]+[0-9]{2}(' + branchPattern + ')[0-9]{3}@satiengg\\.in$');
+  const configuredMatcher = new RegExp(institutionEmailPattern);
+  if (!allowedCollegeDomains.includes('satiengg.in') || pilotAllowedEmails.some(email => !studentEmail.test(email) || !configuredMatcher.test(email))) {
+    throw new Error('Faculty demonstration allowlist must contain only valid SATI student email addresses');
+  }
+}
 
 export const env = {
   nodeEnv,
   demoMode,
+  facultyDemoMode,
   serveFrontend,
   port,
   mongoUri,

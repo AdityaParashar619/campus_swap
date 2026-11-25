@@ -33,6 +33,7 @@ backend/utils/**
 backend/scripts/**
 !backend/scripts/ensureAdmin.js
 !backend/scripts/provisionDemoStudent.js
+!backend/scripts/provisionFacultyDemoAdmin.js
 !backend/scripts/provisionDeploymentIndexes.js
 !backend/scripts/seed.js
 !frontend/

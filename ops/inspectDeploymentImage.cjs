@@ -34,7 +34,8 @@ function* tarEntries(buffer) {
 const expected = new Set([
   'app/server.js', 'app/app.js', 'app/package.json', 'app/package-lock.json', 'app/public/index.html',
   'app/scripts/seed.js', 'app/scripts/ensureAdmin.js',
-  'app/scripts/provisionDeploymentIndexes.js', 'app/scripts/provisionDemoStudent.js'
+  'app/scripts/provisionDeploymentIndexes.js', 'app/scripts/provisionDemoStudent.js',
+  'app/scripts/provisionFacultyDemoAdmin.js'
 ]);
 const approvedMedia = /^app\/public\/assets\/(?:sati-campus-[\w-]+\.webp|sati-logo-[\w-]+\.jpg)$/;
 const privateLayerPath = /(?:^|\/)(?:\.git|\.gitconfig|\.env[^/]*|\.npmrc|\.netrc|backups?|mongodump|credentials|secrets|private-attachments|private-evidence|test-results|playwright-report)(?:\/|$)|\.(?:archive|bson|backup|sqlite3?|p12|pfx)$/i;

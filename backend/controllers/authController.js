@@ -286,6 +286,7 @@ export const createRegisterStudentHandler = ({ deliverCode = sendVerificationCod
 
 export const verifyStudentEmail = asyncHandler(async (req, res) => {
   const email = normalizeEmail(req.body.email);
+  if (env.facultyDemoMode) assertPilotRegistrationAllowed(email);
   const otp = String(req.body.otp || '').trim();
   const otpHash = hashOtp(email, otp, 'student-verification');
   const entry = await EmailVerification.findOne({ email, kind: 'student', expiresAt: { $gt: new Date() }, attempts: { $lt: env.otpMaxAttempts } });
@@ -342,6 +343,7 @@ export const verifyStudentEmail = asyncHandler(async (req, res) => {
 
 export const resendStudentOtp = asyncHandler(async (req, res) => {
   const email = normalizeEmail(req.body.email);
+  if (env.facultyDemoMode) assertPilotRegistrationAllowed(email);
   const entry = await EmailVerification.findOne({ email, kind: 'student' });
   if (!entry) return res.json({ success: true, message: env.emailProvider === 'resend' && env.resendTestMode ? 'If a pending registration exists, a code was sent to the configured Resend test recipient.' : 'If a pending registration exists, a new code has been sent.' });
   if (entry.lastSentAt && Date.now() - entry.lastSentAt.getTime() < env.otpResendCooldownSeconds * 1000) throw new BadRequest('Please wait before requesting another code.');
@@ -527,7 +529,8 @@ export const createForgotPasswordHandler = ({
 } = {}) => asyncHandler(async (req, res) => {
   const email = normalizeEmail(req.body.email);
   if (!email) throw new BadRequest('Email is required');
-  const user = await findAccount(email);
+  const mailboxAllowed = !env.facultyDemoMode || email === env.adminEmail || env.pilotAllowedEmails.includes(email);
+  const user = mailboxAllowed ? await findAccount(email) : null;
   let devMailPreviewToken;
   if (user) {
     const existing = await findPending(email);
