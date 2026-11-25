@@ -21,7 +21,7 @@ import User from '../models/User.js';
 import { exposeContactForConnection } from '../utils/connections.js';
 import { consumeDevelopmentMail } from '../utils/devMailCapture.js';
 import { isPasswordStrong, PASSWORD_POLICY_MESSAGE } from '../utils/passwordPolicy.js';
-import { validateInstitutionalEmail } from '../utils/institutionalIdentity.js';
+import { isInstitutionalStudentEmail, validateInstitutionalEmail } from '../utils/institutionalIdentity.js';
 import { academicProfile } from '../utils/institution.js';
 import { uploadAvatar } from '../services/avatarService.js';
 
@@ -529,7 +529,7 @@ export const createForgotPasswordHandler = ({
 } = {}) => asyncHandler(async (req, res) => {
   const email = normalizeEmail(req.body.email);
   if (!email) throw new BadRequest('Email is required');
-  const mailboxAllowed = !env.facultyDemoMode || email === env.adminEmail || env.pilotAllowedEmails.includes(email);
+  const mailboxAllowed = !env.facultyDemoMode || email === env.adminEmail || isInstitutionalStudentEmail(email);
   const user = mailboxAllowed ? await findAccount(email) : null;
   let devMailPreviewToken;
   if (user) {

@@ -114,9 +114,9 @@ if (syntheticDemoMode && (emailProvider !== 'disabled' || resendDomainVerified |
     cloudinaryCloudName || cloudinaryApiKey || cloudinaryApiSecret || pilotModeEnabled)) {
   throw new Error('Synthetic demo requires disabled mail, media and pilot registration');
 }
-if (facultyDemoMode && (!pilotModeEnabled || !/^[a-z0-9._%+-]+@satiengg\.in$/.test(adminEmail) ||
-    pilotAllowedEmails.includes(adminEmail) || adminPassword || superAdminEmail || superAdminPassword)) {
-  throw new Error('Faculty demonstration requires a student allowlist and separate SATI administrator email, with no bootstrap credentials');
+if (facultyDemoMode && (!/^[a-z0-9._%+-]+@satiengg\.in$/.test(adminEmail) ||
+    (pilotModeEnabled && pilotAllowedEmails.includes(adminEmail)) || adminPassword || superAdminEmail || superAdminPassword)) {
+  throw new Error('Faculty demonstration requires a separate SATI administrator email, with no bootstrap credentials');
 }
 if (!syntheticDemoMode && !['gmail', 'resend'].includes(emailProvider)) throw new Error('EMAIL_PROVIDER must be either gmail or resend');
 if (emailProvider === 'gmail') {
@@ -191,7 +191,8 @@ if (facultyDemoMode) {
   const branchPattern = institutionBranches.join('|');
   const studentEmail = new RegExp('^[a-z]+[0-9]{2}(' + branchPattern + ')[0-9]{3}@satiengg\\.in$');
   const configuredMatcher = new RegExp(institutionEmailPattern);
-  if (!allowedCollegeDomains.includes('satiengg.in') || pilotAllowedEmails.some(email => !studentEmail.test(email) || !configuredMatcher.test(email))) {
+  if (!allowedCollegeDomains.includes('satiengg.in')) throw new Error('Faculty demonstration requires the SATI institutional domain');
+  if (pilotModeEnabled && pilotAllowedEmails.some(email => !studentEmail.test(email) || !configuredMatcher.test(email))) {
     throw new Error('Faculty demonstration allowlist must contain only valid SATI student email addresses');
   }
 }

@@ -4,6 +4,7 @@ import { isDemoDatabase, verifyDeploymentIndexes } from './deploymentIndexes.js'
 import Listing from '../models/Listing.js';
 import CampusIssue from '../models/CampusIssue.js';
 import { ServiceUnavailable } from '../utils/AppError.js';
+import { facultyUnexpectedIdentityFilter } from '../utils/institutionalIdentity.js';
 
 mongoose.set('bufferCommands', false);
 
@@ -60,10 +61,7 @@ export const connectDB = async () => {
     await verifyDeploymentIndexes(database);
     if (env.demoMode) {
       const unexpectedIdentity = env.facultyDemoMode
-        ? { $nor: [
-          { email: { $in: ['reviewer@demo.invalid', ...env.pilotAllowedEmails] }, role: 'student', accountType: 'student' },
-          { email: env.adminEmail, role: 'admin', accountType: 'staff' }
-        ] }
+        ? facultyUnexpectedIdentityFilter()
         : { email: { $not: /@demo\.invalid$/ } };
       if (await database.collection('users').findOne(unexpectedIdentity, { projection: { _id: 1 } })) {
         throw new Error('Demo database contains an unauthorized identity');

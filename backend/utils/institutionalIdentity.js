@@ -10,6 +10,15 @@ try {
   throw new Error('INSTITUTION_EMAIL_PATTERN must be a valid non-stateful regular expression');
 }
 
+const institutionalStudentEmailPattern = (allowedBranches) => {
+  const branchAlternation = [...allowedBranches]
+    .sort((left, right) => right.length - left.length)
+    .map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+    .join('|');
+  return new RegExp(`^([a-z]+)([0-9]{2})(${branchAlternation})([0-9]{3})@satiengg\\.in$`);
+};
+const studentEmailMatcher = institutionalStudentEmailPattern(env.institutionBranches);
+
 export const validateInstitutionalEmail = (rawEmail, { allowedDomains = env.allowedCollegeDomains, emailPattern = env.institutionEmailPattern, allowedBranches = env.institutionBranches } = {}) => {
   const email = normalizeEmail(rawEmail);
   if (!email) throw new BadRequest('Email is required.');
@@ -29,13 +38,7 @@ export const validateInstitutionalEmail = (rawEmail, { allowedDomains = env.allo
     throw new BadRequest('Email must match the SATI student format: name, two-digit year, supported branch, and three-digit roll number.');
   }
 
-  const localPart = email.slice(0, email.indexOf('@'));
-  const branchAlternation = [...allowedBranches]
-    .sort((left, right) => right.length - left.length)
-    .map((value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
-    .join('|');
-  const identityMatcher = new RegExp(`^([a-z]+)([0-9]{2})(${branchAlternation})([0-9]{3})$`);
-  const match = localPart.match(identityMatcher);
+  const match = email.match(institutionalStudentEmailPattern(allowedBranches));
   if (!match || !allowedBranches.includes(match[3])) {
     throw new BadRequest('Email contains an unsupported branch code or malformed roll number.');
   }
@@ -47,6 +50,24 @@ export const validateInstitutionalEmail = (rawEmail, { allowedDomains = env.allo
     emailRollNumber: match[4]
   };
 };
+
+export const isInstitutionalStudentEmail = (email) =>
+  studentEmailMatcher.test(email) && emailMatcher.test(email);
+
+export const facultyUnexpectedIdentityFilter = () => ({
+  $nor: [
+    { email: env.adminEmail, role: 'admin', accountType: 'staff' },
+    { email: 'reviewer@demo.invalid', role: 'student', accountType: 'student' },
+    {
+      role: 'student',
+      accountType: 'student',
+      $and: [
+        { email: { $ne: env.adminEmail, $regex: studentEmailMatcher } },
+        { email: { $regex: emailMatcher } }
+      ]
+    }
+  ]
+});
 
 export const assertInstitutionalEmailConfiguration = () => {
   if (!env.allowedCollegeDomains.includes('satiengg.in')) throw new Error('ALLOWED_COLLEGE_DOMAINS must include satiengg.in');
