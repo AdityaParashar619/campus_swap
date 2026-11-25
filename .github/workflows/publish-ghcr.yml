@@ -1,0 +1,165 @@
+name: Publish same-origin image to GHCR
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit_sha:
+        description: Full SHA of the reviewed main commit with successful CI
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: campusswap-ghcr
+  cancel-in-progress: false
+
+jobs:
+  verify-source:
+    name: Verify reviewed main commit and CI
+    if: github.repository == 'AdityaParashar619/campus_swap' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    steps:
+      - name: Require successful CI for this exact commit
+        shell: bash
+        env:
+          REQUESTED_SHA: ${{ inputs.commit_sha }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          [[ "$REQUESTED_SHA" =~ ^[a-f0-9]{40}$ && "$REQUESTED_SHA" == "$GITHUB_SHA" ]] ||
+            { echo 'Supply the full SHA of the dispatched main commit.' >&2; exit 1; }
+          main_sha=$(gh api "repos/$GITHUB_REPOSITORY/git/ref/heads/main" --jq '.object.sha')
+          test "$main_sha" = "$REQUESTED_SHA"
+          run_id=$(gh api --method GET "repos/$GITHUB_REPOSITORY/actions/workflows/ci.yml/runs" \
+            -f branch=main -f event=push -f head_sha="$REQUESTED_SHA" -F per_page=1 |
+            jq -er --arg sha "$REQUESTED_SHA" --arg repo "$GITHUB_REPOSITORY" '
+              .workflow_runs[0] | select(.head_sha == $sha and .head_branch == "main" and
+                .head_repository.full_name == $repo and .event == "push" and
+                .status == "completed" and .conclusion == "success") | .id | numbers
+            ')
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$run_id/jobs?per_page=100" | jq -e '
+            .total_count == 5 and all(.jobs[]; .status == "completed" and .conclusion == "success") and
+            ([.jobs[].name] | sort) == ([
+              "Backend tests and integrations", "Chromium end-to-end", "Deployment image build and inspection",
+              "Frontend tests and production build", "Production Compose validation"
+            ] | sort)
+          ' > /dev/null
+          printf 'Verified CI run %s for %s\n' "$run_id" "$REQUESTED_SHA"
+
+  publish:
+    name: Build, verify and publish the same-origin image
+    needs: verify-source
+    if: github.repository == 'AdityaParashar619/campus_swap' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: '22'
+      - name: Build and inspect the release image
+        id: image
+        shell: bash
+        run: |
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          bash ops/build-production-image.sh campusswap-release:local
+      - name: Install checksum-pinned Trivy
+        shell: bash
+        run: bash ops/install-trivy.sh
+      - name: Scan the exact release image
+        shell: bash
+        env:
+          IMAGE_ID: ${{ steps.image.outputs.image-id }}
+        run: node ops/scan-security.mjs image "$RUNNER_TEMP/trivy-cache" "$IMAGE_ID"
+      - name: Smoke test the scanned image with isolated MongoDB
+        shell: bash
+        env:
+          IMAGE_ID: ${{ steps.image.outputs.image-id }}
+        run: |
+          suffix=$(node -p 'require("node:crypto").randomUUID()')
+          network="campusswap-smoke-$suffix"
+          mongo="$network-mongo"
+          app="$network-app"
+          docker network create --internal "$network" >/dev/null
+          trap 'docker rm -f "$app" "$mongo" >/dev/null 2>&1 || true; docker network rm "$network" >/dev/null' EXIT
+          docker run -d --name "$mongo" --network "$network" --network-alias mongo \
+            --tmpfs /data/db --tmpfs /data/configdb mongo:8 >/dev/null
+          for attempt in {1..30}; do
+            if docker exec "$mongo" mongosh --quiet --eval 'quit(db.adminCommand({ping:1}).ok === 1 ? 0 : 1)' >/dev/null 2>&1; then
+              break
+            fi
+            if [[ "$attempt" == 30 ]]; then echo 'Disposable MongoDB never became ready.' >&2; exit 1; fi
+            sleep 1
+          done
+          MONGO_URI=mongodb://mongo:27017/campusswap_demo
+          JWT_SECRET=$(openssl rand -hex 32)
+          OTP_PEPPER=$(openssl rand -hex 32)
+          export MONGO_URI JWT_SECRET OTP_PEPPER
+          docker run --rm --network "$network" -e MONGO_URI "$IMAGE_ID" \
+            node scripts/provisionDeploymentIndexes.js --apply campusswap_demo
+          docker run -d --name "$app" --network "$network" --network-alias app \
+            --security-opt no-new-privileges -e MONGO_URI -e JWT_SECRET -e OTP_PEPPER \
+            -e CAMPUSSWAP_DEMO_MODE=true -e EMAIL_PROVIDER=disabled \
+            -e FRONTEND_URL=https://demo.example -e TRUST_PROXY_HOPS=1 "$IMAGE_ID" >/dev/null
+          docker run --rm -i --network "$network" --entrypoint node "$IMAGE_ID" --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { setTimeout as delay } from 'node:timers/promises';
+          const request = (path, options) => fetch('http://app:5000' + path, {
+            signal: AbortSignal.timeout(2000), ...options
+          });
+          let ready = false;
+          for (let attempt = 0; attempt < 30 && !ready; attempt++) {
+            try {
+              const reply = await request('/health');
+              ready = reply.ok && (await reply.json()).database === 'connected';
+            } catch {}
+            if (!ready) await delay(500);
+          }
+          assert.ok(ready, 'Release database readiness failed');
+          assert.equal((await request('/live')).status, 200);
+          const page = await request('/network', { headers: { accept: 'text/html' } });
+          assert.equal(page.status, 200);
+          const asset = (await page.text()).match(/src="(\/assets\/[^"]+\.js)"/)?.[1];
+          assert.ok(asset, 'Compiled asset missing from the SPA');
+          assert.equal((await request(asset)).status, 200);
+          assert.equal((await (await request('/api/auth/capabilities')).json()).emailFlowsEnabled, false);
+          assert.equal((await request('/api/auth/register/student', { method: 'POST' })).status, 403);
+          console.log('Release readiness, liveness, SPA assets and restricted demo mode passed.');
+          JS
+      - name: Publish the verified image and record its digest
+        shell: bash
+        env:
+          IMAGE_ID: ${{ steps.image.outputs.image-id }}
+          CONFIG_DIGEST: ${{ steps.image.outputs.config-digest }}
+          GHCR_TOKEN: ${{ github.token }}
+        run: |
+          [[ "$GITHUB_SHA" =~ ^[a-f0-9]{40}$ && "$IMAGE_ID" =~ ^sha256:[a-f0-9]{64}$ && "$CONFIG_DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          image="ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/campusswap"
+          ref="$image:$GITHUB_SHA"
+          docker image tag "$IMAGE_ID" "$ref"
+          test "$(docker image inspect --format '{{.Id}}' "$ref")" = "$IMAGE_ID"
+
+          # Keep registry credentials outside the normal Docker configuration.
+          auth=$(mktemp -d "${RUNNER_TEMP:?}/campusswap-docker.XXXXXXXX")
+          trap 'docker --config "$auth" logout ghcr.io >/dev/null 2>&1 || true; rm -rf -- "$auth"' EXIT
+          printf '{"auths":{"ghcr.io":{}}}\n' > "$auth/config.json"
+          printf '%s' "$GHCR_TOKEN" | docker --config "$auth" login ghcr.io --username "$GITHUB_ACTOR" --password-stdin
+          unset GHCR_TOKEN
+          digest=$(docker --config "$auth" push "$ref" | awk '$2 == "digest:" { print $3 }')
+          [[ "$digest" =~ ^sha256:[a-f0-9]{64}$ ]]
+          docker --config "$auth" buildx imagetools inspect --raw "$image@$digest" | jq -e --arg config "$CONFIG_DIGEST" '
+            .schemaVersion == 2 and .config.digest == $config and (.layers | type == "array" and length > 0)
+          ' >/dev/null
+          test "$(docker --config "$auth" buildx imagetools inspect --format '{{.Manifest.Digest}}' "$ref")" = "$digest"
+          printf 'Published image: `%s@%s`\n\nSource tag: `%s`\n' "$image" "$digest" "$ref" >> "$GITHUB_STEP_SUMMARY"
+          printf 'Published %s@%s\n' "$image" "$digest"

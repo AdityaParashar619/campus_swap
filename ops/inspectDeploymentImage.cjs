@@ -1,5 +1,6 @@
 const assert = require('node:assert/strict');
 const { execFileSync } = require('node:child_process');
+const { createHash } = require('node:crypto');
 const fs = require('node:fs');
 const { gunzipSync } = require('node:zlib');
 
@@ -36,6 +37,7 @@ const expected = new Set([
   'app/scripts/provisionDeploymentIndexes.js', 'app/scripts/provisionDemoStudent.js'
 ]);
 const approvedMedia = /^app\/public\/assets\/(?:sati-campus-[\w-]+\.webp|sati-logo-[\w-]+\.jpg)$/;
+const privateLayerPath = /(?:^|\/)(?:\.git|\.gitconfig|\.env[^/]*|\.npmrc|\.netrc|backups?|mongodump|credentials|secrets|private-attachments|private-evidence|test-results|playwright-report)(?:\/|$)|\.(?:archive|bson|backup|sqlite3?|p12|pfx)$/i;
 const forbiddenPath = /(?:^|\/)(?:\.git|\.env[^/]*|\.npmrc|\.netrc|test-support|test-results|playwright-report|backups?|mongodump|dumps?|credentials|secrets|private-attachments|private-evidence|uploads)(?:\/|$)|\.(?:archive|bson|dump|bak|backup|sql|sqlite3?|pem|key|p12|pfx|zip|7z|tar|tgz|gz)$/i;
 const patterns = [
   ['Resend-shaped API key', /\bre_[A-Za-z0-9_]{18,}\b/],
@@ -93,10 +95,12 @@ try {
     if (!hits.has(name)) hits.set(name, new Set());
     hits.get(name).add(finding);
   };
-  const scan = (name, content) => {
+  const scanMarkers = (name, content) => {
     for (const [value, category] of local) {
       if (content.includes(value)) report(name, category);
     }
+  };
+  const scan = (name, content) => {
     if (content.subarray(0, 8192).includes(0)) return;
     const source = content.toString('utf8');
     for (const [value, category] of local) {
@@ -105,12 +109,16 @@ try {
     }
     for (const [category, pattern] of patterns) if (pattern.test(source)) report(name, category);
   };
-  scan('(image configuration)', outer.get(manifest.Config));
+  const config = outer.get(manifest.Config);
+  scanMarkers('(image configuration)', config);
+  scan('(image configuration)', config);
   for (const layer of manifest.Layers) {
     const blob = outer.get(layer);
     assert.ok(blob, 'Image manifest refers to a missing layer');
     const tar = blob[0] === 31 && blob[1] === 139 ? gunzipSync(blob) : blob;
     for (const { name, content, type } of tarEntries(tar)) {
+      if (privateLayerPath.test(name)) report('(image layer)', 'private filename');
+      if (type === '0' || type === '') scanMarkers('(image layer)', content);
       if ((!name.startsWith('app/') && !name.startsWith('frontend/')) || name.includes('/node_modules/')) continue;
       if (forbiddenPath.test(name)) report(name, 'forbidden runtime filename');
       if (!['', '0'].includes(type)) continue;
@@ -127,8 +135,14 @@ try {
     report('app/public/assets', 'compiled JavaScript missing');
   }
   for (const [name, findings] of hits) console.error(name, [...findings].join(', '));
-  if (hits.size) process.exitCode = 1;
-  else console.log('Deployment inspection passed:', manifest.Layers.length, 'layers and', files.size, 'application files.');
+  if (hits.size) {
+    process.exitCode = 1;
+  } else {
+    const configDigest = 'sha256:' + createHash('sha256').update(config).digest('hex');
+    if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, `config-digest=${configDigest}\n`);
+    console.log('Deployment inspection passed:', manifest.Layers.length, 'layers and', files.size, 'application files.');
+    console.log('Inspected image configuration:', configDigest);
+  }
 } catch {
   console.error('Deployment image inspection could not complete.');
   process.exitCode = 1;

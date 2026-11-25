@@ -169,38 +169,10 @@ jobs:
           '
       - name: Build and inspect the same-origin image
         id: production-image
-        run: |
-          canary=$(node -p 'require("node:crypto").randomUUID()')
-          mkdir -p backend/backups frontend/src/private-attachments frontend/test-results
-          printf '%s\n' "$canary" > backend/.env.ci-canary
-          printf '%s\n' "VITE_SOCKET_URL=https://$canary.example.invalid" > frontend/.env.production.local
-          printf '%s\n' "$canary" > backend/backups/ci-canary.archive
-          printf '%s\n' "$canary" > frontend/src/private-attachments/ci-canary.js
-          printf '%s\n' "$canary" > frontend/test-results/trace.zip
-          docker build --file Dockerfile.same-origin --tag campusswap-ci:local .
-          test "$(docker image inspect --format '{{.Config.User}}' campusswap-ci:local)" = node
-          docker run --rm --network none --entrypoint sh campusswap-ci:local -ec '
-            test "$(id -u):$(id -g)" = 1000:1000
-            test -z "$(command -v npm || true)"
-            test ! -e /usr/local/lib/node_modules/npm
-            node -e "require(\"bcrypt\"); require(\"sharp\")"
-          '
-          DEPLOYMENT_AUDIT_CANARIES="$canary" node ops/inspectDeploymentImage.cjs campusswap-ci:local
+        run: bash ops/build-production-image.sh campusswap-ci:local
       - name: Install checksum-pinned Trivy
         id: trivy-install
-        run: |
-          version=0.76.2
-          archive="trivy_${version}_Linux-64bit.tar.gz"
-          bin="$RUNNER_TEMP/trivy-bin"
-          mkdir -p "$bin"
-          cd "$bin"
-          curl --fail --silent --show-error --location --retry 3 --max-time 120 \
-            "https://github.com/aquasecurity/trivy/releases/download/v${version}/$archive" --output "$archive"
-          echo "bc0fc726e017b8927a62b2d3531d7a84ee01769daf5c99ed866dced54089fdbf  $archive" | sha256sum --check --strict
-          tar -xzf "$archive" trivy
-          ./trivy --version
-          echo "$bin" >> "$GITHUB_PATH"
-          echo "cache-day=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+        run: bash ops/install-trivy.sh
       - name: Cache Trivy vulnerability database
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
         with:
@@ -211,7 +183,9 @@ jobs:
         run: node ops/scan-security.mjs repo "$RUNNER_TEMP/trivy-cache"
       - name: Scan the inspected local production image
         if: ${{ !cancelled() && steps.production-image.outcome == 'success' && steps.trivy-install.outcome == 'success' }}
-        run: node ops/scan-security.mjs image "$RUNNER_TEMP/trivy-cache" campusswap-ci:local
+        env:
+          IMAGE_ID: ${{ steps.production-image.outputs.image-id }}
+        run: node ops/scan-security.mjs image "$RUNNER_TEMP/trivy-cache" "$IMAGE_ID"
       - name: Build and check the separate Compose images
         id: compose-images
         if: ${{ !cancelled() && steps.trivy-install.outcome == 'success' }}
