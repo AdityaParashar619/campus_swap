@@ -1,6 +1,7 @@
 import dotenv from 'dotenv';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
+import { assetNamespace, facultyAssetNamespace } from '../utils/cloudinaryNamespace.js';
 
 // Resolve the backend's own .env regardless of whether Node starts from the
 // repository root or the backend directory. Compose-provided process vars win.
@@ -17,6 +18,10 @@ for (const key of requiredVars) {
 const nodeEnv = process.env.NODE_ENV || 'development';
 const demoMode = process.env.CAMPUSSWAP_DEMO_MODE === 'true';
 const facultyDemoMode = process.env.CAMPUSSWAP_FACULTY_DEMO_MODE === 'true';
+if (!/^[a-z0-9][a-z0-9-]{0,39}$/.test(assetNamespace()) ||
+    (facultyDemoMode && assetNamespace() !== facultyAssetNamespace)) {
+  throw new Error('Invalid Cloudinary asset namespace for this deployment');
+}
 const serveFrontend = process.env.SERVE_FRONTEND === 'true';
 const emailProvider = (process.env.EMAIL_PROVIDER || 'resend').trim().toLowerCase();
 const otpMockEnabled = process.env.OTP_MOCK_ENABLED === 'true';
