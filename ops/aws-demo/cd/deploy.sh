@@ -2,6 +2,20 @@
 set -euo pipefail
 umask 077
 
+stage=arguments
+trap 'printf "DEPLOYMENT_ERROR=%s\n" "$stage" >&2' ERR
+digest=${1:-}
+mode=${2:-deploy}
+[[ "$digest" =~ ^sha256:[a-f0-9]{64}$ && "$mode" =~ ^(diagnostic|deploy)$ && $# -ge 1 && $# -le 2 ]]
+if [[ "$mode" == diagnostic ]]; then
+  stage=diagnostic
+  [[ $EUID -eq 0 && -r /opt/campusswap/runtime.env && -w /opt/campusswap ]]
+  printf 'DEPLOYMENT_DIAGNOSTIC_OK\n'
+  printf 'DEPLOYMENT_DIAGNOSTIC_STDERR_OK\n' >&2
+  exit 0
+fi
+
+stage=filesystem
 cd /opt/campusswap
 exec 9>.deploy.lock
 flock -n 9 || { echo DEPLOYMENT_BUSY; exit 1; }
@@ -9,8 +23,6 @@ flock -n 9 || { echo DEPLOYMENT_BUSY; exit 1; }
 repository=ghcr.io/adityaparashar619/campusswap
 baseline="$repository@sha256:249c8623b771dc9b5ac18196c1c87587c9048fa81a8b68552747f351d4f7b3ed"
 verified_record=last-verified-image
-digest=${1:-}
-[[ "$digest" =~ ^sha256:[a-f0-9]{64}$ && $# -eq 1 ]]
 candidate="$repository@$digest"
 config=(docker compose -f compose.yml -f compose.release.yml)
 
@@ -21,6 +33,7 @@ bounded_logs() {
   [[ $(docker inspect --format '{{.HostConfig.LogConfig.Type}}:{{index .HostConfig.LogConfig.Config "max-size"}}:{{index .HostConfig.LogConfig.Config "max-file"}}' "$(app_id)") == local:10m:3 ]]
 }
 
+stage=preflight
 [[ $(stat -c '%u:%a' runtime.env) == 0:600 ]]
 runtime_hash=$(sha256sum runtime.env)
 public_ip=$(sed -n 's@^FRONTEND_URL=https://\([0-9.]*\)$@\1@p' runtime.env)
@@ -100,6 +113,7 @@ if [[ "$current" == "$candidate" ]] && bounded_logs; then
   echo DEPLOYMENT_UNCHANGED
   exit 0
 fi
+stage=candidate
 if [[ "$current" != "$candidate" ]]; then
   auth=$(mktemp -d)
   trap 'rm -f -- "$auth/config.json"; rmdir -- "$auth"' EXIT
@@ -115,6 +129,7 @@ faculty_compatible "$candidate" || { echo DEPLOYMENT_FAILED; exit 1; }
 [[ "$runtime_hash" == "$(sha256sum runtime.env)" ]]
 if [[ "$current" != "$candidate" ]]; then write_atomic previous-image "$current"; fi
 
+stage=activation
 rollback_needed=1
 finish() {
   local status=$?

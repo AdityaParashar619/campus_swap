@@ -103,8 +103,13 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 14
     permissions:
+      contents: read
       id-token: write
     steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
       - name: Obtain a short-lived AWS deployment session
         uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
         with:
@@ -121,18 +126,5 @@ jobs:
           DIGEST: ${{ needs.verify.outputs.digest }}
           AWS_PAGER: ''
         run: |
-          [[ "$INSTANCE" =~ ^i-[a-f0-9]{17}$ && "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
-          command -v session-manager-plugin >/dev/null
-          parameters=$(jq -cn --arg digest "$DIGEST" '{Digest: [$digest]}')
-          log=$(mktemp "$RUNNER_TEMP/campusswap-session.XXXXXXXX")
-          trap 'rm -f -- "$log"' EXIT
-          status=0
-          timeout 660s aws ssm start-session --document-name CampusSwapDeployDemo \
-            --target "$INSTANCE" --parameters "$parameters" </dev/null >"$log" 2>&1 || status=$?
-          markers=$(tr -d '\r' <"$log" |
-            grep -Ex 'DEPLOYMENT_(SUCCEEDED|UNCHANGED|FAILED|BUSY|ROLLED_BACK|ROLLBACK_FAILED)' || true)
-          printf '%s\n' "$markers"
-          if [[ "$status" != 0 || ! "$markers" =~ ^DEPLOYMENT_(SUCCEEDED|UNCHANGED)$ ]]; then
-            echo 'Deployment did not succeed. Inspect the deployment markers and session history before retrying.' >&2
-            exit 1
-          fi
+          bash ops/aws-demo/cd/run-session.sh diagnostic
+          bash ops/aws-demo/cd/run-session.sh deploy

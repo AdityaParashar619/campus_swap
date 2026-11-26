@@ -167,6 +167,9 @@ jobs:
             defaults.each { |key, value| abort "Unexpected demo default" unless vars.fetch(key) == { "key" => key, "value" => value } }
             inputs.each { |key| abort "Render must prompt for runtime inputs" unless vars.fetch(key) == { "key" => key, "sync" => false } }
           '
+      - name: Test the scoped Session Manager executor
+        shell: bash
+        run: bash ops/aws-demo/cd/session.test.sh
       - name: Build and inspect the same-origin image
         id: production-image
         run: bash ops/build-production-image.sh campusswap-ci:local
