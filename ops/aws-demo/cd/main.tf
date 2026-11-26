@@ -43,9 +43,10 @@ provider "aws" {
 }
 
 locals {
-  issuer       = "token.actions.githubusercontent.com"
-  provider_arn = var.create_github_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : "arn:aws:iam::${var.aws_account_id}:oidc-provider/${local.issuer}"
-  deploy_code  = base64encode(replace(file("${path.module}/deploy.sh"), "\r\n", "\n"))
+  issuer        = "token.actions.githubusercontent.com"
+  provider_arn  = var.create_github_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : "arn:aws:iam::${var.aws_account_id}:oidc-provider/${local.issuer}"
+  deploy_code   = base64encode(replace(file("${path.module}/deploy.sh"), "\r\n", "\n"))
+  executor_code = base64encode(replace(file("${path.module}/session-executor.sh"), "\r\n", "\n"))
 }
 
 resource "aws_iam_openid_connect_provider" "github" {
@@ -63,6 +64,11 @@ resource "aws_ssm_document" "deploy" {
     sessionType   = "NonInteractiveCommands"
     description   = "Deploy an approved CampusSwap image digest and restore its predecessor on failure."
     parameters = {
+      Mode = {
+        type          = "String"
+        default       = "diagnostic"
+        allowedValues = ["diagnostic", "deploy"]
+      }
       Digest = {
         type           = "String"
         allowedPattern = "^sha256:[a-f0-9]{64}$"
@@ -70,7 +76,9 @@ resource "aws_ssm_document" "deploy" {
     }
     properties = {
       linux = {
-        commands      = "printf '%s' '${local.deploy_code}' | /usr/bin/base64 -d | /usr/bin/timeout --kill-after=150s 420s /usr/bin/bash -s -- '{{ Digest }}'"
+        commands      = <<-COMMAND
+          /usr/bin/bash -c 'set -o pipefail; printf "%s" "$1" | /usr/bin/base64 --decode | /usr/bin/bash -s -- "$2" "$3" "$4"' -- '${local.executor_code}' '{{ Mode }}' '{{ Digest }}' '${local.deploy_code}'
+        COMMAND
         runAsElevated = true
       }
     }
