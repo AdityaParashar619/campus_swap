@@ -144,6 +144,70 @@ jobs:
           assert.equal((await request('/api/auth/register/student', { method: 'POST' })).status, 403);
           console.log('Release readiness, liveness, SPA assets and restricted demo mode passed.');
           JS
+      - name: Verify faculty startup with existing accounts
+        shell: bash
+        env:
+          IMAGE_ID: ${{ steps.image.outputs.image-id }}
+        run: |
+          suffix=$(node -p 'require("node:crypto").randomUUID()')
+          network="campusswap-faculty-$suffix"
+          mongo="$network-mongo"
+          docker network create --internal "$network" >/dev/null
+          trap 'docker rm -f "$mongo" >/dev/null 2>&1 || true; docker network rm "$network" >/dev/null' EXIT
+          docker run -d --name "$mongo" --network "$network" --network-alias mongo \
+            --tmpfs /data/db --tmpfs /data/configdb mongo:8 >/dev/null
+          for attempt in {1..30}; do
+            if docker exec "$mongo" mongosh --quiet --eval 'quit(db.adminCommand({ping:1}).ok === 1 ? 0 : 1)' >/dev/null 2>&1; then break; fi
+            if [[ "$attempt" == 30 ]]; then echo 'Disposable faculty MongoDB was not ready.' >&2; exit 1; fi
+            sleep 1
+          done
+          export MONGO_URI=mongodb://mongo:27017/campusswap_demo
+          JWT_SECRET=$(openssl rand -hex 32)
+          OTP_PEPPER=$(openssl rand -hex 32)
+          GMAIL_APP_PASSWORD=$(openssl rand -hex 16)
+          CLOUDINARY_API_SECRET=$(openssl rand -hex 32)
+          export JWT_SECRET OTP_PEPPER GMAIL_APP_PASSWORD CLOUDINARY_API_SECRET
+          docker run --rm --network "$network" -e MONGO_URI "$IMAGE_ID" \
+            node scripts/provisionDeploymentIndexes.js --apply campusswap_demo
+          docker exec "$mongo" mongosh campusswap_demo --quiet --eval '
+            db.users.insertMany([
+              {email:"facultyfixture@satiengg.in",role:"admin",accountType:"staff"},
+              {email:"reviewer@demo.invalid",role:"student",accountType:"student"},
+              {email:"outsider27cs001@satiengg.in",role:"student",accountType:"student"}
+            ])' >/dev/null
+          docker run --rm -i --network "$network" --entrypoint node \
+            -e MONGO_URI -e JWT_SECRET -e OTP_PEPPER -e GMAIL_APP_PASSWORD -e CLOUDINARY_API_SECRET \
+            -e CAMPUSSWAP_DEMO_MODE=true -e CAMPUSSWAP_FACULTY_DEMO_MODE=true -e PILOT_MODE_ENABLED=false \
+            -e EMAIL_PROVIDER=gmail -e GMAIL_USER=fixture@example.invalid -e EMAIL_FROM=fixture@example.invalid \
+            -e ADMIN_EMAIL=facultyfixture@satiengg.in -e CLOUDINARY_CLOUD_NAME=fixture \
+            -e CLOUDINARY_API_KEY=fixture -e CLOUDINARY_ASSET_NAMESPACE=campusswap-faculty \
+            -e FRONTEND_URL=https://demo.example -e TRUST_PROXY_HOPS=1 "$IMAGE_ID" --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import mongoose from 'mongoose';
+          import { createApp } from './app.js';
+          import { connectDB, isDatabaseReady } from './config/db.js';
+          import { once } from 'node:events';
+          await connectDB();
+          assert.ok(isDatabaseReady());
+          const server = createApp().listen(0, '127.0.0.1');
+          await once(server, 'listening');
+          try {
+            const url = 'http://127.0.0.1:' + server.address().port;
+            const capabilities = await fetch(url + '/api/auth/capabilities');
+            assert.equal((await capabilities.json()).emailFlowsEnabled, true);
+            const register = await fetch(url + '/api/auth/register/student', {
+              method: 'POST', headers: { 'content-type': 'application/json' },
+              body: JSON.stringify({ email: 'eligible27cs002@satiengg.in' })
+            });
+            assert.equal(register.status, 400);
+            assert.match((await register.json()).message, /required student fields/i);
+            console.log('Faculty database readiness and domain-wide registration passed.');
+          } finally {
+            server.closeAllConnections();
+            server.close();
+            await mongoose.disconnect();
+          }
+          JS
       - name: Publish the verified image and record its digest
         shell: bash
         env:
@@ -187,4 +251,15 @@ jobs:
             "$image" "$digest" "$ref" "$visibility" >> "$GITHUB_STEP_SUMMARY"
           [[ "$visibility" == public ]] ||
             { echo 'The image was pushed, but public access to the exact digest could not be verified.' >&2; exit 1; }
+          jq -n --arg image "$image@$digest" --arg commit "$GITHUB_SHA" \
+            --arg run_id "$GITHUB_RUN_ID" --arg attempt "$GITHUB_RUN_ATTEMPT" \
+            '{schema: 2, image: $image, commit: $commit, run_id: $run_id, attempt: $attempt, visibility: "public", faculty_compatible: true}' \
+            > "$RUNNER_TEMP/campusswap-release.json"
           printf 'Published %s@%s\n' "$image" "$digest"
+      - name: Record the verified release for deployment
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: campusswap-release-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/campusswap-release.json
+          if-no-files-found: error
+          retention-days: 30

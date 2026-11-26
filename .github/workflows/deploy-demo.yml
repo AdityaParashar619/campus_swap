@@ -1,0 +1,138 @@
+name: Deploy CampusSwap demo
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_run_id:
+        description: Successful GHCR release workflow run ID
+        required: true
+        type: string
+
+permissions: {}
+
+concurrency:
+  group: campusswap-demo-deploy
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify the public release
+    if: github.repository == 'AdityaParashar619/campus_swap' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    permissions:
+      actions: read
+      contents: read
+    outputs:
+      digest: ${{ steps.release.outputs.digest }}
+    steps:
+      - name: Verify the approved release record
+        id: release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_RUN_ID: ${{ inputs.release_run_id }}
+        run: |
+          [[ "$RELEASE_RUN_ID" =~ ^[1-9][0-9]{0,19}$ ]]
+          repo="repos/$GITHUB_REPOSITORY"
+          baseline_commit=357fff8b7ae44c3002895201026c4e9c041ce3e1
+          run=$(gh api "$repo/actions/runs/$RELEASE_RUN_ID")
+          jq -e --arg repo "$GITHUB_REPOSITORY" --arg id "$RELEASE_RUN_ID" '
+            (.id | tostring) == $id and .path == ".github/workflows/publish-ghcr.yml" and
+            .repository.full_name == $repo and .head_repository.full_name == $repo and
+            .event == "workflow_dispatch" and .head_branch == "main" and
+            .status == "completed" and .conclusion == "success"
+          ' <<< "$run" >/dev/null
+          attempt=$(jq -er '.run_attempt | numbers' <<< "$run")
+          commit=$(jq -er '.head_sha | strings' <<< "$run")
+          [[ "$attempt" =~ ^[1-9][0-9]*$ && "$commit" =~ ^[a-f0-9]{40}$ ]]
+          gh api "$repo/compare/$baseline_commit...$commit" --jq '.status' |
+            grep -Ex 'ahead|identical' >/dev/null
+          gh api "$repo/compare/$commit...$GITHUB_SHA" --jq '.status' |
+            grep -Ex 'ahead|identical' >/dev/null
+          jobs=$(gh api "$repo/actions/runs/$RELEASE_RUN_ID/attempts/$attempt/jobs?per_page=100")
+          jq -e '
+              .total_count == 2 and all(.jobs[]; .conclusion == "success") and
+              ([.jobs[].name] | sort) == [
+                "Build, verify and publish the same-origin image", "Verify reviewed main commit and CI"
+              ] and ([.jobs[].steps[] | select(.conclusion == "success") | .name] as $steps |
+                ["Scan the exact release image", "Smoke test the scanned image with isolated MongoDB", "Publish the verified image and record its digest"] |
+                all(. as $name | $steps | index($name) != null))
+            ' <<< "$jobs" >/dev/null
+          if [[ "$RELEASE_RUN_ID" == 45886722396 && "$attempt" == 1 && "$commit" == "$baseline_commit" ]]; then
+            # The current faculty deployment predates release artifacts. Pin its reviewed run, commit and digest.
+            image=ghcr.io/adityaparashar619/campusswap@sha256:249c8623b771dc9b5ac18196c1c87587c9048fa81a8b68552747f351d4f7b3ed
+          else
+            jq -e 'any(.jobs[].steps[]; .name == "Verify faculty startup with existing accounts" and .conclusion == "success")' <<< "$jobs" >/dev/null
+            directory=$(mktemp -d "$RUNNER_TEMP/campusswap-release.XXXXXXXX")
+            trap 'rm -rf -- "$directory"' EXIT
+            gh run download "$RELEASE_RUN_ID" --repo "$GITHUB_REPOSITORY" \
+              --name "campusswap-release-$attempt" --dir "$directory"
+            image=$(jq -er --arg id "$RELEASE_RUN_ID" --arg attempt "$attempt" --arg commit "$commit" '
+              select(.schema == 2 and .run_id == $id and .attempt == $attempt and
+                .commit == $commit and .visibility == "public" and .faculty_compatible == true) | .image | strings
+            ' "$directory/campusswap-release.json")
+          fi
+          [[ "$image" =~ ^ghcr\.io/adityaparashar619/campusswap@sha256:[a-f0-9]{64}$ ]]
+          registry_repo=${image#ghcr.io/}
+          registry_repo=${registry_repo%@*}
+          token=$(curl --disable -fsS --max-time 20 --get https://ghcr.io/token \
+            --data-urlencode service=ghcr.io --data-urlencode "scope=repository:$registry_repo:pull" | jq -er .token)
+          manifest=$(mktemp "$RUNNER_TEMP/campusswap-manifest.XXXXXXXX")
+          curl --disable -fsS --max-time 25 -H "Authorization: Bearer $token" \
+            -H 'Accept: application/vnd.oci.image.manifest.v1+json, application/vnd.docker.distribution.manifest.v2+json' \
+            "https://ghcr.io/v2/$registry_repo/manifests/${image#*@}" > "$manifest"
+          [[ "sha256:$(sha256sum "$manifest" | cut -d ' ' -f1)" == "${image#*@}" ]]
+          config=$(jq -er '.config.digest | strings' "$manifest")
+          [[ "$config" =~ ^sha256:[a-f0-9]{64}$ ]]
+          blob=$(mktemp "$RUNNER_TEMP/campusswap-config.XXXXXXXX")
+          curl --disable -fsSL --max-time 25 -H "Authorization: Bearer $token" \
+            "https://ghcr.io/v2/$registry_repo/blobs/$config" > "$blob"
+          unset token
+          [[ "sha256:$(sha256sum "$blob" | cut -d ' ' -f1)" == "$config" ]]
+          jq -e --arg commit "$commit" '.config.Labels["org.opencontainers.image.revision"] == $commit and .architecture == "amd64"' "$blob" >/dev/null
+          printf 'digest=%s\n' "${image#*@}" >> "$GITHUB_OUTPUT"
+          printf 'Approved release run: %s (attempt %s)\n\nImage: `%s`\n' \
+            "$RELEASE_RUN_ID" "$attempt" "$image" >> "$GITHUB_STEP_SUMMARY"
+
+  deploy:
+    name: Deploy and verify on EC2
+    needs: verify
+    if: github.repository == 'AdityaParashar619/campus_swap' && github.ref == 'refs/heads/main' && github.event_name == 'workflow_dispatch'
+    environment: campusswap-demo
+    runs-on: ubuntu-24.04
+    timeout-minutes: 14
+    permissions:
+      id-token: write
+    steps:
+      - name: Obtain a short-lived AWS deployment session
+        uses: aws-actions/configure-aws-credentials@d979d5b3a71173a29b74b5b88418bfda9437d885 # v6.1.1
+        with:
+          aws-region: us-east-1
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          allowed-account-ids: ${{ vars.AWS_ACCOUNT_ID }}
+          role-duration-seconds: 900
+          role-session-name: campusswap-${{ github.run_id }}
+          mask-aws-account-id: true
+      - name: Run the scoped Session Manager document
+        shell: bash
+        env:
+          INSTANCE: ${{ vars.AWS_INSTANCE_ID }}
+          DIGEST: ${{ needs.verify.outputs.digest }}
+          AWS_PAGER: ''
+        run: |
+          [[ "$INSTANCE" =~ ^i-[a-f0-9]{17}$ && "$DIGEST" =~ ^sha256:[a-f0-9]{64}$ ]]
+          command -v session-manager-plugin >/dev/null
+          parameters=$(jq -cn --arg digest "$DIGEST" '{Digest: [$digest]}')
+          log=$(mktemp "$RUNNER_TEMP/campusswap-session.XXXXXXXX")
+          trap 'rm -f -- "$log"' EXIT
+          status=0
+          timeout 660s aws ssm start-session --document-name CampusSwapDeployDemo \
+            --target "$INSTANCE" --parameters "$parameters" </dev/null >"$log" 2>&1 || status=$?
+          markers=$(tr -d '\r' <"$log" |
+            grep -Ex 'DEPLOYMENT_(SUCCEEDED|UNCHANGED|FAILED|BUSY|ROLLED_BACK|ROLLBACK_FAILED)' || true)
+          printf '%s\n' "$markers"
+          if [[ "$status" != 0 || ! "$markers" =~ ^DEPLOYMENT_(SUCCEEDED|UNCHANGED)$ ]]; then
+            echo 'Deployment did not succeed. Inspect the deployment markers and session history before retrying.' >&2
+            exit 1
+          fi

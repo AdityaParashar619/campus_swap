@@ -1,0 +1,12 @@
+services:
+  app:
+    image: ghcr.io/adityaparashar619/campusswap@sha256:249c8623b771dc9b5ac18196c1c87587c9048fa81a8b68552747f351d4f7b3ed
+    env_file: /opt/campusswap/runtime.env
+    ports:
+      - "127.0.0.1:8080:5000"
+    restart: unless-stopped
+    logging:
+      driver: local
+      options:
+        max-size: "10m"
+        max-file: "3"

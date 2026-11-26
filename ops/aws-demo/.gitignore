@@ -1,0 +1,10 @@
+.terraform/
+*.tfstate*
+*.tfvars*
+*.tfplan
+*.plan
+crash*.log
+.env*
+runtime.env
+*.dpapi
+*.pem
