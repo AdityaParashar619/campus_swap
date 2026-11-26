@@ -110,7 +110,7 @@ resource "aws_iam_role_policy" "deploy" {
         Effect    = "Allow"
         Action    = "ssm:StartSession"
         Resource  = "arn:aws:ec2:us-east-1:${var.aws_account_id}:instance/${var.instance_id}"
-        Condition = { Bool = { "ssm:SessionDocumentAccessCheck" = "true" } }
+        Condition = { BoolIfExists = { "ssm:SessionDocumentAccessCheck" = "true" } }
       },
       {
         Sid      = "AllowOnlyTheDeploymentSessionDocument"
