@@ -1,4 +1,5 @@
 import { BadRequest } from './AppError.js';
+import { isCampusLocationImageUrl } from './campusLocationImage.js';
 import { escapeSearch, parseNoticePagination } from './noticeValidation.js';
 import {
   COORDINATE_LIMITS, LOCATION_CATEGORIES, LOCATION_STATUSES, LOCATION_TEXT_LIMITS,
@@ -27,6 +28,9 @@ export function normalizeLocation(body, partial = false) {
     if (!Object.hasOwn(body, field)) continue;
     const value = body[field] === null && field !== 'name' ? '' : readText(body[field], field, limit);
     if (field.endsWith('Url') && value && !isLocationUrl(value)) throw new BadRequest(`${field} must be a safe HTTPS URL`);
+    if (field === 'imageUrl' && value && !isCampusLocationImageUrl(value)) {
+      throw new BadRequest('Image URL must link directly to an approved HTTPS image host: Cloudinary, Google image hosting, or the Justdial image CDN');
+    }
     data[field] = value;
   }
   if ((!partial || Object.hasOwn(body, 'name')) && !data.name) throw new BadRequest('name is required');

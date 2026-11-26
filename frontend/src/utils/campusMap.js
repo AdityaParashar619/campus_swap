@@ -23,11 +23,13 @@ export function normalizeLocation(value) {
   for (const field of ['description', ...Object.keys(LOCATION_DETAILS)]) {
     if (typeof value[field] === 'string' && value[field].trim()) location[field] = value[field];
   }
-  if (typeof value.imageUrl === 'string') {
+  if (value.imageUnavailable === true) location.imageUnavailable = true;
+  if (typeof value.imageUrl === 'string' && value.imageUrl.trim()) {
     try {
       const url = new URL(value.imageUrl);
       if (url.protocol === 'https:' && !url.username && !url.password) location.imageUrl = url.href;
-    } catch { /* Omit malformed images. */ }
+    } catch { /* Unavailable images use the detail fallback. */ }
+    if (!location.imageUrl) location.imageUnavailable = true;
   }
   return location;
 }

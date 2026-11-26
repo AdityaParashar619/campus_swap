@@ -3,10 +3,15 @@ import CampusLocation, { hasCoordinatePair, LOCATION_TEXT_LIMITS } from '../mode
 import { asyncHandler } from '../middleware/errorMiddleware.js';
 import { BadRequest, Conflict, NotFound } from '../utils/AppError.js';
 import { normalizeLocation, parseLocationList, readCoordinateReview, requireFields } from '../utils/campusLocationValidation.js';
+import { isCampusLocationImageUrl } from '../utils/campusLocationImage.js';
 import { publishedCampusLocationFilter } from '../utils/campusLocationVisibility.js';
 
 const publicFields = [...Object.keys(LOCATION_TEXT_LIMITS), 'category', 'latitude', 'longitude', 'buildingCode', 'aliases'];
-const publicView = ({ _id, ...data }) => ({ id: String(_id), ...data });
+const publicView = ({ _id, imageUrl, ...data }) => ({
+  id: String(_id),
+  ...data,
+  ...(imageUrl && (isCampusLocationImageUrl(imageUrl) ? { imageUrl } : { imageUnavailable: true }))
+});
 const assertId = (id) => {
   if (!mongoose.isObjectIdOrHexString(id)) throw new BadRequest('Invalid campus location ID');
 };

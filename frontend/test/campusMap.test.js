@@ -69,7 +69,8 @@ test('public details omit missing fields, unsafe images, external map URLs and a
     description: 'Fictional details', openingHoursText: '', imageUrl: 'javascript:alert(1)',
     externalMapUrl: 'https://example.invalid/', coordinateVerifiedBy: 'private', createdBy: 'private'
   });
-  assert.deepEqual(normalizeLocation(raw), location(1, { description: 'Fictional details' }));
+  assert.deepEqual(normalizeLocation(raw), location(1, { description: 'Fictional details', imageUnavailable: true }));
+  assert.deepEqual(normalizeLocation(location(2, { imageUnavailable: true })), location(2, { imageUnavailable: true }));
   assert.equal(normalizeLocation(location(1, { imageUrl: 'https://example.invalid/a.jpg' })).imageUrl, 'https://example.invalid/a.jpg');
 });
 

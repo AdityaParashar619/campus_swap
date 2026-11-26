@@ -4,12 +4,13 @@ import mongoSanitize from 'express-mongo-sanitize';
 import { rateLimit } from 'express-rate-limit';
 import crypto from 'node:crypto';
 import { env } from '../config/env.js';
+import { CAMPUS_LOCATION_IMAGE_ORIGINS } from '../utils/campusLocationImage.js';
 
 export const securityMiddleware = [
   helmet(env.serveFrontend ? {
     contentSecurityPolicy: {
       directives: {
-        imgSrc: ["'self'", 'data:', 'blob:', 'https://res.cloudinary.com', 'https://tile.openstreetmap.org'],
+        imgSrc: ["'self'", 'data:', 'blob:', ...CAMPUS_LOCATION_IMAGE_ORIGINS, 'https://tile.openstreetmap.org'],
         frameSrc: ["'self'", 'https://res.cloudinary.com', 'https://drive.google.com', 'https://docs.google.com'],
         connectSrc: ["'self'", ...env.frontendOrigins.map((origin) => origin.replace(/^https:/, 'wss:'))]
       }

@@ -55,3 +55,14 @@ test('search treats punctuation literally and bounds categories, statuses and pa
     assert.throws(() => parseLocationList(query));
   }
 });
+
+test('campus photo validation accepts only the exact HTTPS origins allowed by CSP', () => {
+  for (const host of ['res.cloudinary.com', 'lh3.googleusercontent.com', 'content.jdmagicbox.com']) {
+    const imageUrl = 'https://' + host + '/fixture.jpg';
+    assert.equal(normalizeLocation({ imageUrl }, true).imageUrl, imageUrl);
+  }
+  for (const imageUrl of ['https://example.invalid/fixture.jpg', 'https://lh3.googleusercontent.com.example.invalid/fixture.jpg', 'https://res.cloudinary.com:444/photo.png']) {
+    assert.throws(() => normalizeLocation({ imageUrl }, true), /approved HTTPS image host/);
+  }
+  assert.equal(normalizeLocation({ externalMapUrl: 'https://example.invalid/map' }, true).externalMapUrl, 'https://example.invalid/map');
+});
