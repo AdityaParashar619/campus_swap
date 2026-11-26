@@ -234,7 +234,11 @@ function LocationEditor({ id, onClose, onMutation }) {
               <details className="min-w-0 sm:col-span-2">
                 <summary className="cursor-pointer py-2 font-semibold">Advanced Details</summary>
                 <div className="mt-2 grid gap-4 sm:grid-cols-2">
-                  {ADVANCED_FIELDS.map(([key, label, maxLength]) => <Field key={key} label={label} maxLength={maxLength} value={form[key]} onChange={(value) => set(key, value)} />)}
+                  {ADVANCED_FIELDS.map(([key, label, maxLength]) => <Field key={key} label={label} maxLength={maxLength} value={form[key]}
+                    onChange={(value) => set(key, value)} {...(key === 'imageUrl' && { 'aria-describedby': 'campus-image-help' })} />)}
+                  <p id="campus-image-help" className="text-sm text-slate-600 dark:text-slate-300">
+                    Paste a public, direct HTTPS image link from res.cloudinary.com, lh3.googleusercontent.com, or content.jdmagicbox.com. The image must load without sign-in or a redirect to another host.
+                  </p>
                 </div>
               </details>
               <div className="sm:col-span-2"><Button type="submit" disabled={busy || conflicted || Boolean(loadError)}>{pending ? 'Saving…' : saved ? 'Save Changes' : 'Save Draft'}</Button></div>

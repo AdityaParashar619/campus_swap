@@ -190,14 +190,20 @@ function LocationDetails({ id, onClose }) {
               <div key={field}><dt className="font-semibold">{label}</dt><dd>{location[field]}</dd></div>
             ))}
           </dl>
-          {location.imageUrl && <img className="mt-4 max-h-56 w-full rounded-lg object-contain" src={location.imageUrl}
-            alt={location.name} loading="lazy" referrerPolicy="no-referrer" />}
+          {(location.imageUrl || location.imageUnavailable) && <LocationImage key={location.imageUrl || location.id} url={location.imageUrl} name={location.name} />}
           <a className="mt-4 inline-flex min-h-11 items-center rounded-lg bg-blue-700 px-4 text-sm font-bold text-white"
             href={directionsUrl(location)} target="_blank" rel="noopener noreferrer">Get Directions</a>
         </>}
       </section>
     </PremiumCard>
   );
+}
+
+function LocationImage({ url, name }) {
+  const [failed, setFailed] = useState(false);
+  if (!url || failed) return <p role="status" className="mt-4 rounded-lg bg-slate-100 p-3 text-sm dark:bg-slate-800">Location image unavailable.</p>;
+  return <img className="mt-4 max-h-56 w-full rounded-lg object-contain" src={url} alt={name}
+    loading="lazy" referrerPolicy="no-referrer" onError={() => setFailed(true)} />;
 }
 
 function RequestError({ message, onRetry }) {

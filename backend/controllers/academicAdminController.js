@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { env } from '../config/env.js';
 import AcademicResource, { ACADEMIC_RESOURCE_SCOPES, ACADEMIC_RESOURCE_TYPES, ACADEMIC_VERIFICATION_STATUSES } from '../models/AcademicResource.js';
 import { asyncHandler } from '../middleware/errorMiddleware.js';
 import { academicPrograms, getAcademicProgram } from '../utils/academicPrograms.js';
@@ -56,12 +57,24 @@ const duplicate = async (data, excluded) => {
   if (await AcademicResource.exists(query)) throw new Conflict('Duplicate active academic resource');
 };
 
-export const assertPublishable = (item) => {
+const isSameActor = (first, second) => Boolean(first && second && String(first) === String(second));
+const publicationAction = (action) => env.facultyDemoMode ? 'faculty_' + action : action;
+
+const assertReferenceEvidence = (item) => {
+  if (item.applicabilityMode === 'reference_only' && (item.resourceKind !== 'exact_document' || item.scope !== 'program'
+    || !item.programCode || !item.semester || !item.sourceUrl || !item.checkedAt || !item.applicabilityEvidence || !item.uncertainty)) {
+    throw new BadRequest('Reference review requires an exact program and semester, official source, review date, evidence, and uncertainty');
+  }
+};
+
+export const assertPublishable = (item, { nodeEnv, facultyDemoMode } = env) => {
   if (item.resourceKind === 'exact_document' && ['syllabus', 'timetable'].includes(item.resourceType)
     && (item.scope !== 'program' || !item.programCode || !item.semester)) {
     throw new BadRequest('Publishing a syllabus or timetable requires a canonical program and semester');
   }
-  if (process.env.NODE_ENV === 'production' && item.verificationStatus !== 'verified') {
+  if (facultyDemoMode && item.verificationStatus !== 'verified') assertReferenceEvidence(item);
+  if (nodeEnv === 'production' && !facultyDemoMode
+    && (item.verificationStatus !== 'verified' || !item.verifiedBy || !item.lastVerifiedAt || isSameActor(item.verifiedBy, item.createdBy))) {
     throw new BadRequest('Production publication requires independent verification');
   }
 };
@@ -77,7 +90,7 @@ export const listAcademicResources = asyncHandler(async (req, res) => {
     AcademicResource.find(filter).sort({ updatedAt: -1 }).skip((page - 1) * limit).limit(limit).lean(),
     AcademicResource.countDocuments(filter)
   ]);
-  res.json({ success: true, data: items, programs: academicPrograms, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
+  res.json({ success: true, data: items, programs: academicPrograms, facultyPublication: env.facultyDemoMode, pagination: { page, limit, total, totalPages: Math.ceil(total / limit) } });
 });
 
 export const createAcademicResource = asyncHandler(async (req, res) => {
@@ -91,7 +104,7 @@ export const createAcademicResource = asyncHandler(async (req, res) => {
     ...data, publicationStatus, publishedAt: publicationStatus === 'published' ? new Date() : null,
     verificationStatus: 'unverified', lastVerifiedAt: null, verifiedBy: null, isActive: true,
     createdBy: actor, updatedBy: actor,
-    history: [{ actor, action: publicationStatus === 'published' ? 'created_and_published' : 'created_draft', changedFields: Object.keys(data) }]
+    history: [{ actor, action: publicationStatus === 'published' ? publicationAction('created_and_published') : 'created_draft', changedFields: Object.keys(data) }]
   });
   res.status(201).json({ success: true, data: item });
 });
@@ -111,11 +124,15 @@ export const updateAcademicResource = asyncHandler(async (req, res) => {
   }
   if (item.publicationStatus === 'published') {
     assertPublishable(item);
+    if (changes.publicationStatus === 'published') {
+      item.isActive = true;
+      item.retiredAt = null;
+    }
     item.publishedAt = item.publishedAt || new Date();
   } else {
     item.publishedAt = null;
   }
-  item.history.push({ actor: req.user.userId, action: item.publicationStatus === 'published' ? 'updated_and_published' : 'updated_draft', changedFields: changed });
+  item.history.push({ actor: req.user.userId, action: item.publicationStatus === 'published' ? publicationAction('updated_and_published') : 'updated_draft', changedFields: changed });
   await duplicate(item.toObject(), item._id);
   await item.save();
   res.json({ success: true, data: item });
@@ -132,10 +149,11 @@ export const setAcademicResourceStatus = asyncHandler(async (req, res) => {
   const changed = [];
   if (Object.hasOwn(req.body, 'verificationStatus')) {
     if (!ACADEMIC_VERIFICATION_STATUSES.includes(req.body.verificationStatus)) throw new BadRequest('Invalid verification status');
-    if (req.body.verificationStatus === 'verified' && item.applicabilityMode === 'reference_only'
-      && (item.resourceKind !== 'exact_document' || item.scope !== 'program' || !item.programCode || !item.semester
-        || !item.sourceUrl || !item.checkedAt || !item.applicabilityEvidence || !item.uncertainty)) {
-      throw new BadRequest('Reference verification requires an exact program and semester, official source, review date, evidence, and uncertainty');
+    if (req.body.verificationStatus === 'verified') {
+      if (env.nodeEnv === 'production' && (isSameActor(req.user.userId, item.createdBy) || isSameActor(req.user.userId, item.updatedBy))) {
+        throw new BadRequest('Independent verification must be recorded by a different administrator');
+      }
+      assertReferenceEvidence(item);
     }
     if (req.body.verificationStatus === 'verified' && item.applicabilityMode !== 'reference_only'
       && item.resourceKind !== 'official_index' && ['syllabus', 'timetable'].includes(item.resourceType)
@@ -171,7 +189,8 @@ export const setAcademicResourceStatus = asyncHandler(async (req, res) => {
     changed.push('isActive');
   }
   item.updatedBy = req.user.userId;
-  const action = !item.isActive ? 'retired' : item.publicationStatus === 'published' ? 'published' : 'status_changed';
+  if (item.isActive && changed.some((field) => ['publicationStatus', 'isActive'].includes(field))) await duplicate(item.toObject(), item._id);
+  const action = !item.isActive ? 'retired' : changed.includes('publicationStatus') && item.publicationStatus === 'published' ? publicationAction('published') : 'status_changed';
   item.history.push({ actor: req.user.userId, action, changedFields: changed });
   await item.save();
   res.json({ success: true, data: item });

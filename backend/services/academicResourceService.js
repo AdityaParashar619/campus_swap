@@ -1,3 +1,4 @@
+import { env } from '../config/env.js';
 import AcademicResource from '../models/AcademicResource.js';
 import { resolveAcademicProgram } from '../utils/academicPrograms.js';
 
@@ -25,7 +26,7 @@ const applicability = (resource, identity) => {
 
 const classify = (resource, identity) => {
   if (resource.resourceKind === 'official_index') return 'browsing_fallback';
-  if (resource.applicabilityMode === 'reference_only') return 'official_reference';
+  if (resource.applicabilityMode === 'reference_only') return resource.verificationStatus === 'verified' ? 'official_reference' : 'published_reference';
   if (['syllabus', 'timetable'].includes(resource.resourceType) && resource.scope === 'program' && resource.semester) {
     if (resource.verificationStatus === 'verified' && applicability(resource, identity).confirmed) return 'exact_verified_match';
     return 'published_reference';
@@ -71,7 +72,10 @@ export const buildPersonalizedAcademicResources = async (user, { ResourceModel =
 
   const records = await ResourceModel.find({
     isActive: true,
-    $and: [{ $or: [{ publicationStatus: 'published' }, { verificationStatus: 'verified' }] }],
+    $and: [{ $or: [
+      { publicationStatus: 'published', ...(env.nodeEnv === 'production' && !env.facultyDemoMode && { verificationStatus: 'verified' }) },
+      { publicationStatus: { $exists: false }, verificationStatus: 'verified' }
+    ] }],
     semester: { $in: [semester, null] },
     $or: [
       { scope: 'college', departmentCode: null, programCode: null },

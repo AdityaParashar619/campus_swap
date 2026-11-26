@@ -267,10 +267,10 @@ test('administrator publishes and retires a development fixture while student is
   await test.step('student campus map uses published locations and stays usable at each breakpoint', async () => {
     const adminLocations = `${backendUrl}/api/admin/campus-locations`;
     const headers = { Authorization: `Bearer ${adminToken}` };
-    async function fixture(name, category, status, latitude) {
+    async function fixture(name, category, status, latitude, imageUrl) {
       const coordinates = { latitude, longitude: 78 };
       const response = await request.post(adminLocations, {
-        headers, data: { name, category, ...coordinates, description: 'Fictional location for browser testing.' }
+        headers, data: { name, category, ...coordinates, imageUrl, description: 'Fictional location for browser testing.' }
       });
       expect(response.status()).toBe(201);
       const id = (await response.json()).data._id;
@@ -290,8 +290,15 @@ test('administrator publishes and retires a development fixture while student is
     }));
     await page.goto('/campus-map');
     await expect(page.getByText(/No campus locations are available yet/)).toBeVisible();
-    await fixture('Fictional Atlas Library', 'library', 'published', 23.5);
-    await fixture('Fictional Atlas Courtyard', 'facility', 'published', 23.51);
+    const workingImage = 'https://lh3.googleusercontent.com/ci-campus-map-image.png';
+    const unavailableImage = 'https://res.cloudinary.com/demo/image/upload/ci-campus-map-missing.png';
+    await page.route(workingImage, (route) => route.fulfill({
+      contentType: 'image/png',
+      body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+jf1sAAAAASUVORK5CYII=', 'base64')
+    }));
+    await page.route(unavailableImage, (route) => route.fulfill({ status: 404 }));
+    await fixture('Fictional Atlas Library', 'library', 'published', 23.5, workingImage);
+    await fixture('Fictional Atlas Courtyard', 'facility', 'published', 23.51, unavailableImage);
     const draft = await fixture('Fictional Hidden Draft', 'library', 'draft', 23.52);
     const archived = await fixture('Fictional Hidden Archive', 'library', 'archived', 23.53);
     for (const id of [draft, archived]) {
@@ -311,6 +318,7 @@ test('administrator publishes and retires a development fixture while student is
     await library.click();
     const details = page.getByRole('region', { name: 'Location details' });
     await expect(details.getByRole('heading', { name: 'Fictional Atlas Library' })).toBeVisible();
+    const photo = details.getByRole('img', { name: 'Fictional Atlas Library' });
     const directions = details.getByRole('link', { name: 'Get Directions' });
     await expect(directions).toHaveAttribute('href', 'https://www.google.com/maps/dir/?api=1&destination=23.5%2C78');
     await expect(directions).toHaveAttribute('rel', 'noopener noreferrer');
@@ -322,6 +330,8 @@ test('administrator publishes and retires a development fixture while student is
       await expect(page.getByLabel('Category', { exact: true })).toBeVisible();
       await expect(map.getByRole('button', { name: 'Zoom in' })).toBeVisible();
       await expect(directions).toBeVisible();
+      await expect(photo).toBeVisible();
+      await expect.poll(() => photo.evaluate((image) => image.naturalWidth)).toBeGreaterThan(0);
       expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
     }
     await page.getByLabel('Category', { exact: true }).selectOption('library');
@@ -332,6 +342,8 @@ test('administrator publishes and retires a development fixture while student is
     await expect(results.getByRole('listitem')).toHaveCount(1);
     await results.getByRole('button', { name: /Fictional Atlas Courtyard/ }).click();
     await expect(details.getByRole('heading', { name: 'Fictional Atlas Courtyard' })).toBeVisible();
+    await expect(details.getByText('Location image unavailable.')).toBeVisible();
+    await expect(details.getByRole('img', { name: 'Fictional Atlas Courtyard' })).toHaveCount(0);
     await page.route('**/api/campus-locations?*search=unavailable*', (route) => route.fulfill({
       status: 503, json: { message: 'Synthetic temporary outage' }
     }), { times: 1 });

@@ -45,16 +45,17 @@ test('publication state is distinct from verification and requires program plus 
   await assert.rejects(new AcademicResource({ ...base, isActive: false }).validate(), /Retired resources/i);
 });
 
-test('unverified direct publication is development-only', () => {
-  const item = { resourceKind: 'exact_document', resourceType: 'syllabus', scope: 'program', programCode: 'CSE', semester: '7', verificationStatus: 'unverified' };
-  const previous = process.env.NODE_ENV;
-  try {
-    process.env.NODE_ENV = 'development';
-    assert.doesNotThrow(() => assertPublishable(item));
-    process.env.NODE_ENV = 'production';
-    assert.throws(() => assertPublishable(item), /Production publication requires independent verification/i);
-  } finally {
-    if (previous == null) delete process.env.NODE_ENV;
-    else process.env.NODE_ENV = previous;
-  }
+test('faculty and development can publish without independent verification; normal production requires a separate reviewer', () => {
+  const owner = new mongoose.Types.ObjectId();
+  const item = { resourceKind: 'exact_document', resourceType: 'syllabus', scope: 'program', programCode: 'CSE', semester: '7', verificationStatus: 'unverified', createdBy: owner };
+  const production = { nodeEnv: 'production', facultyDemoMode: false };
+  const faculty = { ...production, facultyDemoMode: true };
+  assert.doesNotThrow(() => assertPublishable(item, { nodeEnv: 'development' }));
+  assert.doesNotThrow(() => assertPublishable(item, faculty));
+  assert.throws(() => assertPublishable({ ...item, semester: null }, faculty), /canonical program and semester/i);
+  assert.throws(() => assertPublishable({ ...item, applicabilityMode: 'reference_only' }, faculty), /evidence/i);
+  assert.throws(() => assertPublishable(item, production), /independent verification/i);
+  const verification = { verificationStatus: 'verified', lastVerifiedAt: new Date(), verifiedBy: owner };
+  assert.throws(() => assertPublishable({ ...item, ...verification }, production), /independent verification/i);
+  assert.doesNotThrow(() => assertPublishable({ ...item, ...verification, verifiedBy: new mongoose.Types.ObjectId() }, production));
 });
